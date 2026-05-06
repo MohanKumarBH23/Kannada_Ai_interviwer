@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+motor
+pydantic
+python-dotenv
+google-genai
+PyMuPDF
+python-multipart
+pyjwt
+bcrypt
+passlib
