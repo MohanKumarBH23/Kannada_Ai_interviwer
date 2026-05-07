@@ -301,85 +301,6 @@ async def generate_final_results(job_role: str, messages: list) -> dict:
         }
 
 
-async def evaluate_resume_ats(resume_text: str) -> dict:
-    if not is_configured or not client:
-        return {
-            "ats_score": 75,
-            "ats_feedback": (
-                "ನಿಮ್ಮ ರೆಸ್ಯೂಮ್ ಉತ್ತಮವಾಗಿದೆ, ಆದರೆ ಕೆಲವು ಕೀವರ್ಡ್ಗಳನ್ನು ಸೇರಿಸಬಹುದು.\n"
-                "1. ಅನುಭವದ ವಿಭಾಗವನ್ನು ವಿಸ್ತರಿಸಿ.\n"
-                "2. ತಾಂತ್ರಿಕ ಕೌಶಲ್ಯಗಳನ್ನು ಹೈಲೈಟ್ ಮಾಡಿ.\n"
-                "3. ಸಾಧನೆಗಳನ್ನು ಅಂಕಿಅಂಶಗಳೊಂದಿಗೆ ವಿವರಿಸಿ.\n"
-                "4. ಫಾರ್ಮ್ಯಾಟಿಂಗ್ ಅನ್ನು ಸರಳಗೊಳಿಸಿ.\n"
-                "5. ಸಂಪರ್ಕ ಮಾಹಿತಿಯನ್ನು ಪರಿಶೀಲಿಸಿ.\n"
-                "6. ಸಾರಾಂಶವನ್ನು ಆಕರ್ಷಕವಾಗಿ ಮಾಡಿ.\n"
-                "7. ಶಿಕ್ಷಣದ ವಿವರಗಳನ್ನು ಸ್ಪಷ್ಟಪಡಿಸಿ.\n"
-                "8. ಭಾಷಾ ಪ್ರೌಢಿಮೆಯನ್ನು ಉಲ್ಲೇಖಿಸಿ.\n"
-                "9. ಪ್ರಾಜೆಕ್ಟ್ ವಿವರಗಳನ್ನು ಸೇರಿಸಿ.\n"
-                "10. ಕೀವರ್ಡ್ ಆಪ್ಟಿಮೈಸೇಶನ್ ಅಗತ್ಯವಿದೆ.\n"
-                "||| Your resume is good, but you can add some keywords.\n"
-                "1. Expand the experience section.\n"
-                "2. Highlight technical skills.\n"
-                "3. Describe achievements with statistics.\n"
-                "4. Simplify formatting.\n"
-                "5. Check contact information.\n"
-                "6. Make the summary attractive.\n"
-                "7. Clarify education details.\n"
-                "8. Mention language proficiency.\n"
-                "9. Add project details.\n"
-                "10. Keyword optimization is needed."
-            ),
-        }
-
-    resume_text_trimmed = resume_text[:4000] if len(resume_text) > 4000 else resume_text
-
-    prompt = f"""You are an expert ATS (Applicant Tracking System) analyzer.
-Review the following resume and provide:
-1. An ATS score out of 100 based on standard formatting, clarity, and keyword optimization.
-2. Detailed constructive feedback and specific suggestions for improvement.
-
-The feedback MUST be approximately 10 to 12 lines long for each language.
-The feedback MUST be provided in Kannada first, followed by ' ||| ' and then the English translation.
-
-Resume Text:
-{resume_text_trimmed}
-
-Return ONLY a valid JSON object with exactly these two keys:
-{{"ats_score": <integer 0-100>, "ats_feedback": "Detailed Kannada feedback (10-12 lines) ||| English translation (10-12 lines)"}}"""
-
-    try:
-        response = await call_ai_with_retry(
-            client.chat.completions.create,
-            model=MODEL_NAME,
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"}
-        )
-        text = response.choices[0].message.content.strip()
-        
-        # Robust JSON parsing
-        try:
-            data = json.loads(text)
-        except:
-            json_match = re.search(r"\{.*\}", text, re.DOTALL)
-            if json_match:
-                data = json.loads(json_match.group(0))
-            else:
-                raise ValueError("Could not parse JSON from response")
-
-        return {
-            "ats_score": int(data.get("ats_score", 0)),
-            "ats_feedback": data.get("ats_feedback", "ಮಾಹಿತಿ ಲಭ್ಯವಿಲ್ಲ (Info not available)"),
-        }
-    except Exception as e:
-        error_str = str(e)
-        print(f"Error evaluating ATS score: {error_str}")
-        if "429" in error_str or "quota" in error_str.lower() or "rate" in error_str.lower():
-            raise ValueError(
-                "API quota exceeded. Please wait a minute and try again. "
-                "(API ದರ ಮಿತಿ ಮೀರಿದೆ. ದಯವಿಟ್ಟು ಒಂದು ನಿಮಿಷ ಕಾದು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.)"
-            )
-
-
 async def generate_interview_report(job_role: str, messages: list, overall_feedback: str, score: int) -> dict:
     """
     Generates a detailed interview performance report with confidence analysis,
@@ -582,4 +503,24 @@ async def generate_job_info(title: str, location: str) -> dict:
             "requirements": "",
             "eligibility": ""
         }
+
+
+async def generate_resume_from_profile(prompt: str) -> str:
+    """
+    Generates a professional resume summary from profile details.
+    """
+    if not is_configured or not client:
+        return "ಸರಳ ಪ್ರೊಫೈಲ್ ರೆಸ್ಯೂಮ್ (Simple Profile Resume)"
+
+    try:
+        response = await call_ai_with_retry(
+            client.chat.completions.create,
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=1000
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Error generating resume from profile: {e}")
+        return "ರೆಸ್ಯೂಮ್ ತಯಾರಿಸಲು ಸಾಧ್ಯವಾಗಿಲ್ಲ (Could not generate resume)"
 

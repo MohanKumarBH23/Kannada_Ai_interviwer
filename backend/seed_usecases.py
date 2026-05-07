@@ -46,7 +46,7 @@ async def seed_jobs():
             "location": "Nelamangala, Bengaluru",
             "salary": "₹16,000 - ₹20,000 per month",
             "description": "Loading, unloading, and inventory management in a large warehouse.",
-            "requirements": "Willingness to work in shifts. Basic counting skills.",
+            "requirements": "Willingness to work in shifts. Basic counting skillsPhysically fit for heavy lifting, 10th pass, basic counting skills, punctuality..",
             "eligibility": "Physically fit for heavy lifting, 10th pass, basic counting skills, punctuality.",
             "created_at": datetime.now(timezone.utc),
             "is_active": True,

@@ -62,7 +62,7 @@ async def register(user: models.UserCreate):
         "name": user.name,
         "email": user.email,
         "hashed_password": hashed_password,
-        "role": "user",
+        "role": user.role or "user",
         "created_at": datetime.now(timezone.utc),
     }
     result = await users_collection.insert_one(new_user)
@@ -131,6 +131,180 @@ async def read_users_me(token: str = Depends(auth.oauth2_scheme)):
     user["_id"] = str(user["_id"])
     return user
 
+
+@app.put("/api/auth/me", response_model=models.UserResponse)
+async def update_user_me(
+    user_update: models.UserUpdate, 
+    user: dict = Depends(read_users_me)
+):
+    update_data = user_update.model_dump(exclude_unset=True)
+    
+    # If skills or experience changed, we can trigger an AI resume generation if resume_text is not provided
+    if ("skills" in update_data or "experience" in update_data) and "resume_text" not in update_data:
+        # Simple AI resume generation logic
+        skills_str = ", ".join(update_data.get("skills", user.get("skills", [])))
+        exp_str = update_data.get("experience", user.get("experience", "No experience listed"))
+        location_str = update_data.get("location", user.get("location", "Unknown"))
+        
+        prompt = f"Create a professional blue-collar resume summary for {user['name']} based in {location_str}. Skills: {skills_str}. Experience: {exp_str}. Keep it concise and formatted for an AI interviewer."
+        try:
+            generated_resume = await ai_service.generate_resume_from_profile(prompt)
+            update_data["resume_text"] = generated_resume
+        except:
+            pass
+
+    await users_collection.update_one(
+        {"_id": ObjectId(user["id"])}, 
+        {"$set": update_data}
+    )
+    
+    # Fetch updated user
+    updated_user = await users_collection.find_one({"_id": ObjectId(user["id"])})
+    updated_user["_id"] = str(updated_user["_id"])
+    return updated_user
+
+
+@app.post("/api/auth/generate-resume")
+async def generate_user_resume(user: dict = Depends(read_users_me)):
+    skills_str = ", ".join(user.get("skills", []))
+    exp_str = user.get("experience", "No experience listed")
+    location_str = user.get("location", "Unknown")
+    
+    prompt = f"Create a professional blue-collar resume for {user['name']} based in {location_str}. Skills: {skills_str}. Experience: {exp_str}. Format it cleanly with sections for Profile, Skills, and Experience. Keep it suitable for printing or sharing with recruiters."
+    
+    try:
+        generated_resume = await ai_service.generate_resume_from_profile(prompt)
+        await users_collection.update_one(
+            {"_id": ObjectId(user["id"])}, 
+            {"$set": {"resume_text": generated_resume}}
+        )
+        return {"resume_text": generated_resume}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/auth/profile-picture")
+async def upload_profile_picture(
+    file: UploadFile = File(...), 
+    user: dict = Depends(read_users_me)
+):
+    # Ensure it's an image
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    # In a real app, we would save the file to S3/Cloudinary. 
+    # For this demo, we'll convert to base64 to store in DB directly (small images only)
+    try:
+        content = await file.read()
+        import base64
+        base64_image = base64.b64encode(content).decode("utf-8")
+        data_url = f"data:{file.content_type};base64,{base64_image}"
+        
+        await users_collection.update_one(
+            {"_id": ObjectId(user["id"])}, 
+            {"$set": {"profile_picture": data_url}}
+        )
+        return {"profile_picture": data_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/admin/stats")
+async def get_admin_stats(user: dict = Depends(read_users_me)):
+    if user.role not in ["admin", "recruiter"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    total_jobs = await jobs_collection.count_documents({})
+    total_candidates = await candidates_collection.count_documents({})
+    total_interviews = await interviews_collection.count_documents({})
+    
+    # Calculate AI Screened percentage
+    ai_screened = await candidates_collection.count_documents({"evaluation_result": {"$exists": True, "$ne": None}})
+    ai_screened_pct = (ai_screened / total_candidates * 100) if total_candidates > 0 else 0
+    
+    return {
+        "total_jobs": total_jobs,
+        "total_applicants": total_candidates,
+        "total_interviews": total_interviews,
+        "ai_screened_pct": round(ai_screened_pct, 1)
+    }
+
+
+@app.get("/api/admin/all-candidates")
+async def get_all_candidates_admin(user: dict = Depends(read_users_me)):
+    if user.role not in ["admin", "recruiter"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    cursor = candidates_collection.find({}).sort("created_at", -1)
+    candidates = await cursor.to_list(length=1000)
+    
+    # Enrich with job title
+    for c in candidates:
+        c["_id"] = str(c["_id"])
+        job = await jobs_collection.find_one({"_id": ObjectId(c["job_id"])})
+        c["job_title"] = job.get("title", "Unknown Job") if job else "Deleted Job"
+        
+        # Check for interview session
+        session = await interviews_collection.find_one({"candidate_id": c["_id"]})
+        if session:
+            c["session_id"] = str(session["_id"])
+            c["status"] = session.get("status", "Pending")
+            c["ai_score"] = session.get("score")
+        else:
+            c["status"] = c.get("status", "Pending")
+            
+    return candidates
+
+
+@app.get("/api/admin/analytics")
+async def get_admin_analytics(user: dict = Depends(read_users_me)):
+    if user.role not in ["admin", "recruiter"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # 1. Conversion Metrics
+    total_applications = await candidates_collection.count_documents({})
+    
+    interviews_cursor = interviews_collection.find({"is_practice": {"$ne": True}})
+    interviews = await interviews_cursor.to_list(length=5000)
+    
+    total_interviews = len(interviews)
+    completed_interviews = sum(1 for i in interviews if i.get("status") == "completed")
+    
+    selected_candidates = await candidates_collection.count_documents({"selection_status": "Selected"})
+    
+    # 2. Performance Metrics
+    scores = [i.get("score") for i in interviews if i.get("score") is not None]
+    avg_score = sum(scores) / len(scores) if scores else 0
+    highest_score = max(scores) if scores else 0
+    lowest_score = min(scores) if scores else 0
+    
+    # 3. Score Distribution
+    distribution = {
+        "0-20": 0, "21-40": 0, "41-60": 0, "61-80": 0, "81-100": 0
+    }
+    for s in scores:
+        if s <= 20: distribution["0-20"] += 1
+        elif s <= 40: distribution["21-40"] += 1
+        elif s <= 60: distribution["41-60"] += 1
+        elif s <= 80: distribution["61-80"] += 1
+        else: distribution["81-100"] += 1
+
+    return {
+        "funnel": {
+            "applications": total_applications,
+            "interviews_started": total_interviews,
+            "interviews_completed": completed_interviews,
+            "shortlisted": selected_candidates
+        },
+        "performance": {
+            "avg_score": round(avg_score, 1),
+            "highest_score": highest_score,
+            "lowest_score": lowest_score,
+            "total_scored": len(scores)
+        },
+        "distribution": distribution
+    }
+
+
 async def get_current_user_optional(token: str = Depends(auth.oauth2_scheme_optional)):
     if not token:
         return None
@@ -148,88 +322,6 @@ async def get_current_user_optional(token: str = Depends(auth.oauth2_scheme_opti
     except:
         return None
     return None
-
-
-@app.put("/api/auth/me", response_model=models.UserResponse)
-async def update_users_me(
-    user_update: models.UserUpdate, user: dict = Depends(read_users_me)
-):
-    update_data = user_update.model_dump(exclude_unset=True)
-    if not update_data:
-        return user
-
-    await users_collection.update_one(
-        {"_id": ObjectId(user["_id"])}, {"$set": update_data}
-    )
-
-    updated_user = await users_collection.find_one({"_id": ObjectId(user["_id"])})
-    if updated_user:
-        updated_user["_id"] = str(updated_user["_id"])
-        return updated_user
-    return user
-
-
-@app.post("/api/profile/resume", response_model=models.UserResponse)
-async def upload_resume_for_ats(
-    resume: UploadFile = File(...), user: dict = Depends(read_users_me)
-):
-    # Case-insensitive extension check
-    filename = resume.filename or ""
-    if not filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported")
-
-    print(f"DEBUG: Processing PDF: {filename}")
-    try:
-        content = await resume.read()
-        if not content:
-            raise HTTPException(status_code=400, detail="The uploaded PDF is empty")
-            
-        print(f"DEBUG: PDF content size: {len(content)} bytes")
-        
-        # Use a more robust way to open the PDF stream
-        import io
-        doc = fitz.open(stream=io.BytesIO(content), filetype="pdf")
-        text = ""
-        for page in doc:
-            text += page.get_text()
-        doc.close()
-        
-        resume_text = text.strip()
-        print(f"DEBUG: Extracted text length: {len(resume_text)}")
-    except Exception as e:
-        print(f"ERROR during PDF extraction: {e}")
-        raise HTTPException(status_code=400, detail=f"Could not extract text from the PDF: {str(e)}")
-
-    if not resume_text:
-        raise HTTPException(status_code=400, detail="Could not extract text from the PDF. Please upload a text-based PDF.")
-
-    # Evaluate ATS score
-    try:
-        ats_result = await ai_service.evaluate_resume_ats(resume_text)
-    except ValueError as e:
-        error_msg = str(e)
-        if "quota" in error_msg.lower() or "429" in error_msg:
-            raise HTTPException(
-                status_code=429,
-                detail=error_msg,
-            )
-        raise HTTPException(status_code=500, detail=error_msg)
-
-    update_data = {
-        "resume_text": resume_text,
-        "ats_score": ats_result.get("ats_score"),
-        "ats_feedback": ats_result.get("ats_feedback"),
-    }
-
-    await users_collection.update_one(
-        {"_id": ObjectId(user["_id"])}, {"$set": update_data}
-    )
-
-    updated_user = await users_collection.find_one({"_id": ObjectId(user["_id"])})
-    if updated_user:
-        updated_user["_id"] = str(updated_user["_id"])
-        return updated_user
-    return user
 
 
 def require_admin(user: dict = Depends(read_users_me)):

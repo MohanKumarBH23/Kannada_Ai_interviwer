@@ -1,364 +1,263 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { startInterview } from "@/lib/api";
-import { Sparkles, Briefcase, GraduationCap, FileText, LogIn, LogOut, User as UserIcon, MessageSquare } from "lucide-react";
-import Link from "next/link";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import ProfileSection from "@/components/ProfileSection";
-import AtsSection from "@/components/AtsSection";
-import SimpleResumeBuilder from "@/components/SimpleResumeBuilder";
-import SimpleResumePreview from "@/components/SimpleResumePreview";
-import { Layout } from "lucide-react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Mail, Lock, Loader2, ArrowRight, Sparkles, User as UserIcon, Briefcase } from "lucide-react";
 
 export default function Home() {
-  const router = useRouter();
-  const { user, logout, token, loading: authLoading } = useAuth();
-  const [jobRole, setJobRole] = useState("ಸಾಫ್ಟ್‌ವೇರ್ ಇಂಜಿನಿಯರ್ (Software Engineer)");
-  const [difficulty, setDifficulty] = useState("medium");
-  const [resumeFile, setResumeFile] = useState<File | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<"interview" | "profile" | "ats" | "resume">("interview");
-  const [isEditingResume, setIsEditingResume] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [role, setRole] = useState<"candidate" | "recruiter">("candidate");
+  const { login, user, loading: authLoading, logout } = useAuth();
+  const router = useRouter();
 
-  const jobCategories = [
-    {
-      name: "ತಾಂತ್ರಿಕ ಮತ್ತು ಕಚೇರಿ (Technical & Office)",
-      roles: [
-        "ಸಾಫ್ಟ್‌ವೇರ್ ಇಂಜಿನಿಯರ್ (Software Engineer)",
-        "ಡೇಟಾ ಎಂಟ್ರಿ ಆಪರೇಟರ್ (Data Entry Operator)",
-        "ಗ್ರಾಫಿಕ್ ಡಿಸೈನರ್ (Graphic Designer)",
-        "ಅಕೌಂಟೆಂಟ್ (Accountant)",
-        "ರಿಸೆಪ್ಷನಿಸ್ಟ್ (Receptionist)",
-      ]
-    },
-    {
-      name: "ಬ್ಲೂ ಕಾಲರ್ ಮತ್ತು ಕುಶಲ ಕೆಲಸ (Blue Collar & Skilled)",
-      roles: [
-        "ಚಾಲಕ (Driver)",
-        "ಎಲೆಕ್ಟ್ರಿಷಿಯನ್ (Electrician)",
-        "ಪ್ಲಂಬರ್ (Plumber)",
-        "ಮೆಕ್ಯಾನಿಕ್ (Mechanic)",
-        "ಬಡಗಿ (Carpenter)",
-        "ಪೇಂಟರ್ (Painter)",
-        "ಟೈಲರ್ (Tailor)",
-        "ಸೆಕ್ಯುರಿಟಿ ಗಾರ್ಡ್ (Security Guard)",
-      ]
-    },
-    {
-      name: "ಸೇವೆ ಮತ್ತು ಡೆಲಿವರಿ (Service & Delivery)",
-      roles: [
-        "ಡೆಲಿವರಿ ಬಾಯ್ (Delivery Boy)",
-        "ಅಡುಗೆಯವರು (Cook/Chef)",
-        "ಹೌಸ್ ಕೀಪಿಂಗ್ (Housekeeping)",
-        "ವೇಟರ್ (Waiter)",
-        "ಸೇಲ್ಸ್ ಎಕ್ಸಿಕ್ಯೂಟಿವ್ (Sales Executive)",
-        "ಕಸ್ಟಮರ್ ಸಪೋರ್ಟ್ (Customer Support)",
-      ]
-    },
-    {
-      name: "ಇತರೆ (Others)",
-      roles: [
-        "ಶಿಕ್ಷಕರು (Teacher)",
-        "ಮ್ಯಾನೇಜರ್ (Manager)",
-      ]
-    }
-  ];
+  // WE REMOVED ALL AUTO-REDIRECTS.
+  // This page stays as the Login Page until the user successfully logs in or clicks continue.
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      const params = window.location.search;
-      router.push(`/login${params}`);
-    }
-  }, [user, authLoading, router]);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const candidateId = params.get('candidate_id');
-    const jobIdParam = params.get('job_id');
-
-    if (candidateId && jobIdParam && token && !loading) {
-      // Auto-start interview for invited candidate
-      autoStartInterview(candidateId, jobIdParam);
-    }
-  }, [token]);
-
-  const autoStartInterview = async (candidateId: string, jobIdParam: string) => {
-    setLoading(true);
     try {
-      // We can use a default role, the backend will fetch the real title using jobIdParam
-      const session = await startInterview("Job Applicant", "medium", null, token || undefined, jobIdParam, candidateId);
-      router.push(`/interview/${session._id || session.id}?candidate_id=${candidateId}&job_id=${jobIdParam}`);
-    } catch (err) {
-      setError("Failed to auto-start interview.");
-      setLoading(false);
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        let errorMessage = "Login failed";
+        if (errorData.detail) {
+          if (Array.isArray(errorData.detail)) {
+            errorMessage = errorData.detail.map((e: any) => e.msg || JSON.stringify(e)).join(", ");
+          } else {
+            errorMessage = errorData.detail;
+          }
+        }
+        throw new Error(errorMessage);
+      }
+
+      const data = await res.json();
+
+      const userRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/auth/me`, {
+        headers: { Authorization: `Bearer ${data.access_token}` },
+      });
+
+      if (!userRes.ok) {
+        const errorData = await userRes.json();
+        throw new Error(errorData.detail || "Failed to fetch user data");
+      }
+
+      const userData = await userRes.json();
+      
+      let redirectTo = "/";
+      if (userData.role === "admin" || userData.role === "recruiter") {
+        redirectTo = "/recruiter";
+      } else {
+        redirectTo = "/candidate";
+      }
+      
+      login(data.access_token, userData, redirectTo);
+
+    } catch (err: any) {
+      console.error("Login error:", err);
+      setError(err.message || "An unexpected error occurred");
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  if (authLoading || !user) {
+  if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amazon-green"></div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-teal-600"></div>
       </div>
     );
   }
 
-  const handleStart = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
-    try {
-      const session = await startInterview(jobRole, difficulty, resumeFile, token || undefined);
-      router.push(`/interview/${session._id || session.id}`);
-    } catch (err) {
-      setError("ಸಂದರ್ಶನ ಪ್ರಾರಂಭಿಸಲು ವಿಫಲವಾಗಿದೆ (Failed to start interview). ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.");
-      setLoading(false);
-    }
-  };
-
-  const handlePractice = async () => {
-    setLoading(true);
-    try {
-      const session = await startInterview("ಸಾಮಾನ್ಯ ಅಭ್ಯಾಸ (General Practice)", "medium", null, token || undefined, undefined, undefined, true);
-      router.push(`/interview/${session._id || session.id}`);
-    } catch (err) {
-      setError("ಅಭ್ಯಾಸ ಮೋಡ್ ಪ್ರಾರಂಭಿಸಲು ವಿಫಲವಾಗಿದೆ (Failed to start practice mode).");
-      setLoading(false);
-    }
-  };
-
-  const renderContent = () => {
-    switch (activeTab) {
-      case "profile":
-        return <ProfileSection />;
-      case "ats":
-        return <AtsSection onNavigate={(tab) => setActiveTab(tab)} />;
-      case "resume":
-        return (
-          <div className="space-y-8 animate-fade-in">
-            {user.experience && !isEditingResume ? (
-              <SimpleResumePreview onEdit={() => setIsEditingResume(true)} />
-            ) : (
-              <div className="space-y-6">
-                <SimpleResumeBuilder onComplete={() => setIsEditingResume(false)} />
-                {user.experience && (
-                  <button 
-                    onClick={() => setIsEditingResume(false)}
-                    className="w-full py-4 text-slate-400 font-bold hover:text-slate-600 transition-colors"
-                  >
-                    ರದ್ದುಗೊಳಿಸಿ (Cancel)
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        );
-      case "interview":
-      default:
-        return (
-          <div className="bg-white rounded-[2.5rem] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.08)] p-10 border border-slate-50 transition-all">
-            <div className="text-center space-y-6 mb-10">
-              <div className="inline-flex items-center justify-center p-4 bg-teal-50 rounded-[1.5rem] mb-2 shadow-inner border border-teal-100">
-                <Sparkles className="w-10 h-10 text-teal-600 drop-shadow-[0_0_8px_rgba(13,148,136,0.2)]" />
-              </div>
-              <h1 className="text-5xl font-black tracking-tighter text-slate-900 leading-none">
-                ಕನ್ನಡ AI ಸಂದರ್ಶನ
-              </h1>
-              <p className="text-slate-500 font-medium text-lg">
-                ಹೊಸ ಸಂದರ್ಶನವನ್ನು ಪ್ರಾರಂಭಿಸಿ (Start a new interview)
-              </p>
-            </div>
-            <form onSubmit={handleStart} className="space-y-6">
-              <div className="space-y-3">
-                <label className="text-sm font-bold text-slate-700 ml-1 flex items-center gap-2">
-                  <Briefcase className="w-4 h-4 text-teal-600" />
-                  ಉದ್ಯೋಗದ ಪಾತ್ರ (Job Role)
-                </label>
-                <div className="relative group">
-                  <select
-                    value={jobRole}
-                    onChange={(e) => setJobRole(e.target.value)}
-                    className="w-full px-5 py-4 rounded-2xl border border-slate-200 bg-white text-slate-900 focus:ring-4 focus:ring-teal-600/5 focus:border-teal-600 transition-all outline-none appearance-none cursor-pointer shadow-sm"
-                    required
-                  >
-                    <option value="" disabled>ಯಾವುದಾದರೊಂದು ಉದ್ಯೋಗವನ್ನು ಆರಿಸಿ (Select a role)</option>
-                    {jobCategories.map((cat) => (
-                      <optgroup key={cat.name} label={cat.name} className="font-bold text-teal-600">
-                        {cat.roles.map((role) => (
-                          <option key={role} value={role} className="text-slate-900 font-normal">
-                            {role}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                  <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <label className="text-sm font-bold text-slate-700 ml-1 flex items-center gap-2">
-                  <GraduationCap className="w-4 h-4 text-teal-600" />
-                  ಕಷ್ಟದ ಮಟ್ಟ (Difficulty)
-                </label>
-                <div className="relative group">
-                  <select
-                    value={difficulty}
-                    onChange={(e) => setDifficulty(e.target.value)}
-                    className="w-full px-5 py-4 rounded-2xl border border-slate-200 bg-white text-slate-900 focus:ring-4 focus:ring-teal-600/5 focus:border-teal-600 transition-all outline-none appearance-none cursor-pointer shadow-sm"
-                  >
-                    <option value="easy">ಸುಲಭ (Easy)</option>
-                    <option value="medium">ಮಧ್ಯಮ (Medium)</option>
-                    <option value="hard">ಕಷ್ಟ (Hard)</option>
-                  </select>
-                  <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <label className="text-sm font-bold text-slate-700 ml-1 flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-teal-600" />
-                  ರೆಸ್ಯೂಮ್ (Resume - Optional PDF)
-                </label>
-                <div className="relative group">
-                  <input
-                    type="file"
-                    accept=".pdf"
-                    ref={fileInputRef}
-                    onChange={(e) => setResumeFile(e.target.files?.[0] || null)}
-                    className="w-full px-5 py-3 rounded-2xl border border-slate-200 bg-white text-slate-900 focus:ring-4 focus:ring-teal-600/5 focus:border-teal-600 transition-all outline-none file:mr-4 file:py-2 file:px-6 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100 transition-colors cursor-pointer shadow-sm"
-                  />
-                </div>
-              </div>
-
-              {error && (
-                <div className="p-3 bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-sm rounded-lg border border-red-100 dark:border-red-800/50">
-                  {error}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full relative py-5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded-2xl font-bold shadow-xl shadow-teal-600/25 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 flex justify-center items-center gap-3 text-xl overflow-hidden group"
-              >
-                <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
-                {loading ? (
-                  <span className="animate-pulse flex items-center gap-2">ಲೋಡ್ ಆಗುತ್ತಿದೆ... <Sparkles className="w-5 h-5 animate-spin" /></span>
-                ) : (
-                  <>
-                    <span>ಸಂದರ್ಶನ ಪ್ರಾರಂಭಿಸಿ</span>
-                    <Sparkles className="w-6 h-6" />
-                  </>
-                )}
-              </button>
-            </form>
-          </div>
-        );
-    }
-  };
+  const isLoggedIn = !!user;
+  const effectiveRole = isLoggedIn ? (user.role === 'admin' || user.role === 'recruiter' ? 'recruiter' : 'candidate') : role;
+  const isRecruiter = effectiveRole === 'recruiter';
 
   return (
-    <div className="min-h-screen bg-slate-50/50 flex items-center justify-center p-6 sm:p-12 lg:p-20">
-      <div className="max-w-[1440px] w-full flex flex-col md:flex-row gap-10 justify-center items-start animate-fade-in">
-        {/* Left Sidebar */}
-        <div className="w-full md:w-[300px] flex-shrink-0 flex flex-col gap-6">
-          <div className="bg-white rounded-2xl p-8 shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-slate-100 flex flex-col items-center gap-4 transition-all hover:shadow-[0_20px_50px_rgba(0,0,0,0.06)]">
-            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-teal-500/10 to-emerald-500/10 flex items-center justify-center text-teal-600 font-bold text-3xl shadow-inner border border-teal-500/20">
-              {user.name.charAt(0).toUpperCase()}
+    <div className="min-h-screen w-full flex fixed inset-0 bg-slate-50 overflow-hidden">
+      {/* Left side - Dynamic Branding */}
+      <div className={`hidden lg:flex lg:w-1/2 relative bg-gradient-to-br ${isRecruiter ? 'from-blue-900 via-indigo-900 to-blue-900' : 'from-[#0f172a] via-[#134e4a] to-[#0f172a]'} overflow-hidden transition-colors duration-700`}>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(20,184,166,0.1),transparent)]"></div>
+        <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5"></div>
+
+        <div className="relative z-10 flex flex-col justify-end p-20 h-full text-white w-full">
+          <div className="animate-fade-in-up">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-sm font-medium mb-6 shadow-xl">
+              <Sparkles className={`w-4 h-4 ${isRecruiter ? 'text-blue-400' : 'text-teal-400'} drop-shadow-[0_0_8px_rgba(45,212,191,0.8)]`} />
+              <span className="text-slate-200">AI Powered Platform</span>
             </div>
-            <div className="text-center">
-              <p className="font-bold text-slate-900 text-lg truncate max-w-[220px]">{user.name}</p>
-              <p className="text-xs text-slate-500 truncate max-w-[220px]">{user.email}</p>
-            </div>
-            <button
-              onClick={logout}
-              className="mt-2 flex items-center gap-2 px-6 py-3 text-xs font-semibold text-white bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 rounded-xl transition-all shadow-lg shadow-teal-600/20 hover:scale-[1.02] active:scale-[0.98] w-full justify-center"
-            >
-              <LogOut className="w-4 h-4" />
-              ಲಾಗ್ ಔಟ್ (Logout)
-            </button>
+            <h1 className="text-7xl font-black leading-[1] mb-8 text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-200 to-slate-400 tracking-tighter">
+              {isRecruiter ? <>ನೇಮಕಾತಿದಾರರ<br />ವೇದಿಕೆ</> : <>ಕನ್ನಡ AI<br />ಸಂದರ್ಶನ</>}
+            </h1>
+            <p className="text-2xl text-slate-300 max-w-lg font-light leading-relaxed mb-12">
+              {isRecruiter ? 'Simplify your hiring process with India\'s first Kannada AI screening platform.' : 'Prepare and excel in your job interviews with our intelligent AI coach.'}
+            </p>
           </div>
 
-          <nav className="bg-white rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-slate-100 p-3 flex flex-col gap-2">
-            <button
-              onClick={() => setActiveTab("interview")}
-              className={`flex items-center gap-3 px-5 py-4 rounded-xl font-semibold transition-all ${
-                activeTab === "interview"
-                  ? "bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-lg shadow-teal-600/20"
-                  : "text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              <MessageSquare className="w-5 h-5" />
-              ಹೊಸ ಸಂದರ್ಶನ
-            </button>
-            
-            <button
-              onClick={() => setActiveTab("profile")}
-              className={`flex items-center gap-3 px-5 py-4 rounded-xl font-semibold transition-all ${
-                activeTab === "profile"
-                  ? "bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-lg shadow-teal-600/20"
-                  : "text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              <UserIcon className="w-5 h-5" />
-              ಪ್ರೊಫೈಲ್
-            </button>
-
-            <button
-              onClick={() => setActiveTab("ats")}
-              className={`flex items-center gap-3 px-5 py-4 rounded-xl font-semibold transition-all ${
-                activeTab === "ats"
-                  ? "bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-lg shadow-teal-600/20"
-                  : "text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              <FileText className="w-5 h-5" />
-              ATS ಸ್ಕೋರ್
-            </button>
-
-            <button
-              onClick={() => setActiveTab("resume")}
-              className={`flex items-center gap-3 px-5 py-4 rounded-xl font-semibold transition-all ${
-                activeTab === "resume"
-                  ? "bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-lg shadow-teal-600/20"
-                  : "text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              <Layout className="w-5 h-5" />
-              ಸರಳ ರೆಸ್ಯೂಮ್
-            </button>
-
-            <button
-              onClick={handlePractice}
-              className="flex items-center gap-3 px-5 py-4 rounded-xl font-semibold transition-all text-emerald-600 hover:bg-emerald-50 border border-emerald-100 mt-4 shadow-sm"
-            >
-              <Sparkles className="w-5 h-5" />
-              ಅಭ್ಯಾಸ ಮೋಡ್ (Practice)
-            </button>
-
-            {user.role === "admin" && (
-              <Link
-                href="/hiring"
-                className="flex items-center gap-3 px-5 py-4 rounded-xl font-semibold transition-all text-slate-600 hover:bg-slate-50 border-t border-slate-50 mt-2"
-              >
-                <Briefcase className="w-5 h-5 text-teal-600" />
-                ನೇಮಕಾತಿ (Hiring)
-              </Link>
-            )}
-          </nav>
+          <div className="bg-white/5 backdrop-blur-lg p-8 rounded-[2rem] w-full max-w-lg border border-white/10 shadow-2xl animate-fade-in">
+            <div className="flex items-center gap-6 text-slate-300">
+              <div className="flex -space-x-4">
+                <div className="w-12 h-12 rounded-full border-2 border-slate-800 bg-teal-500/20 flex items-center justify-center text-xl">🧑‍💻</div>
+                <div className="w-12 h-12 rounded-full border-2 border-slate-800 bg-blue-500/20 flex items-center justify-center text-xl">👩‍💼</div>
+                <div className="w-12 h-12 rounded-full border-2 border-slate-800 bg-indigo-500/20 flex items-center justify-center text-xl">👨‍🔬</div>
+              </div>
+              <p className="text-lg font-medium">{isRecruiter ? 'Automate screening and save time.' : 'Over 10,000 interviews conducted.'}</p>
+            </div>
+          </div>
         </div>
+      </div>
 
-        {/* Right Content Area */}
-        <div className="flex-1 w-full">
-          {renderContent()}
+      {/* Right side - Unified Login Form */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 lg:p-16 overflow-y-auto bg-slate-50/50 relative">
+        <div className="w-full max-w-md space-y-8 animate-fade-in">
+          <div className="text-center space-y-2">
+            <h2 className="text-5xl font-black text-slate-900 tracking-tight">{isLoggedIn ? 'Welcome Back' : 'Login'}</h2>
+            <p className="text-slate-500 text-lg font-medium">
+              {isLoggedIn ? `Logged in as ${user.name}` : 'Welcome back! Please login to your account.'}
+            </p>
+          </div>
+
+          {/* Role Switcher (Hidden if logged in to avoid confusion) */}
+          {!isLoggedIn && (
+            <div className="flex p-1.5 bg-slate-100 rounded-2xl shadow-inner mb-8">
+              <button 
+                onClick={() => setRole("candidate")}
+                className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold transition-all ${!isRecruiter ? 'bg-white text-teal-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                <UserIcon size={18} />
+                Candidate
+              </button>
+              <button 
+                onClick={() => setRole("recruiter")}
+                className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold transition-all ${isRecruiter ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                <Briefcase size={18} />
+                Recruiter
+              </button>
+            </div>
+          )}
+
+          <div className="bg-white p-10 rounded-[2.5rem] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.06)] border border-slate-100 space-y-8">
+            {isLoggedIn ? (
+              <div className="space-y-6">
+                <div className="flex flex-col items-center gap-4 py-4">
+                   <div className={`w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold text-white ${user.role === 'admin' || user.role === 'recruiter' ? 'bg-blue-600' : 'bg-teal-600'}`}>
+                      {user.name.charAt(0).toUpperCase()}
+                   </div>
+                   <div className="text-center">
+                      <p className="font-bold text-xl text-slate-900">{user.name}</p>
+                      <p className="text-slate-500">{user.email}</p>
+                      <span className={`mt-2 inline-block px-3 py-1 rounded-full text-xs font-bold uppercase ${user.role === 'admin' || user.role === 'recruiter' ? 'bg-blue-100 text-blue-700' : 'bg-teal-100 text-teal-700'}`}>
+                        {user.role}
+                      </span>
+                   </div>
+                </div>
+                <button
+                  onClick={() => router.push(user.role === 'admin' || user.role === 'recruiter' ? '/recruiter' : '/candidate')}
+                  className={`w-full py-5 rounded-2xl font-bold text-lg text-white shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98] ${user.role === 'admin' || user.role === 'recruiter' ? 'bg-blue-600 shadow-blue-500/20' : 'bg-teal-600 shadow-teal-500/20'}`}
+                >
+                  Continue to Dashboard
+                </button>
+                <button
+                  onClick={() => logout()}
+                  className="w-full py-4 text-slate-400 font-bold text-sm hover:text-slate-600 transition-colors"
+                >
+                  Sign Out and Use Another Account
+                </button>
+              </div>
+            ) : (
+              <>
+                {error && (
+                  <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-sm font-medium border border-red-100 flex items-start gap-3 animate-shake">
+                    <div className="p-1 bg-red-100 rounded-full mt-0.5"><Lock className="w-3 h-3 text-red-600" /></div>
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="space-y-2 group">
+                    <label className="text-sm font-bold text-slate-700 ml-1">
+                      ಇಮೇಲ್ (Email)
+                    </label>
+                    <div className="relative">
+                      <Mail className={`w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:${isRecruiter ? 'text-blue-600' : 'text-teal-600'} transition-colors`} />
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                        className="w-full pl-12 pr-4 py-4 bg-slate-50 border-transparent focus:bg-white focus:border-blue-600 focus:ring-4 focus:ring-blue-600/5 rounded-2xl transition-all outline-none text-slate-900 font-medium"
+                        placeholder="name@example.com"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 group">
+                    <div className="flex items-center justify-between ml-1">
+                      <label className="text-sm font-bold text-slate-700">
+                        ಪಾಸ್ವರ್ಡ್ (Password)
+                      </label>
+                      <a href="#" className={`text-xs font-bold ${isRecruiter ? 'text-blue-600' : 'text-teal-600'} hover:underline`}>Forgot?</a>
+                    </div>
+                    <div className="relative">
+                      <Lock className={`w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:${isRecruiter ? 'text-blue-600' : 'text-teal-600'} transition-colors`} />
+                      <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        className="w-full pl-12 pr-4 py-4 bg-slate-50 border-transparent focus:bg-white focus:border-blue-600 focus:ring-4 focus:ring-blue-600/5 rounded-2xl transition-all outline-none text-slate-900 font-medium"
+                        placeholder="••••••••"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className={`w-full relative py-5 ${isRecruiter ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/25' : 'bg-teal-600 hover:bg-teal-700 shadow-teal-500/25'} text-white rounded-2xl font-bold text-lg shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-3 overflow-hidden group`}
+                  >
+                    <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
+                    {isLoading ? (
+                      <Loader2 className="w-6 h-6 animate-spin" />
+                    ) : (
+                      <>
+                        <span>ಲಾಗಿನ್ (Login)</span>
+                        <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                <div className="relative flex items-center py-4">
+                  <div className="flex-grow border-t border-slate-100"></div>
+                  <span className="flex-shrink-0 mx-4 text-slate-400 text-xs font-bold uppercase tracking-widest">Or</span>
+                  <div className="flex-grow border-t border-slate-100"></div>
+                </div>
+
+                <Link
+                  href={`/register?role=${role}`}
+                  className="w-full flex items-center justify-center py-5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-2xl font-bold transition-all"
+                >
+                  ಹೊಸ ಖಾತೆ ರಚಿಸಿ (Create Account)
+                </Link>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

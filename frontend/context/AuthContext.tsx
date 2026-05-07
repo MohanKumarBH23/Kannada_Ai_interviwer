@@ -19,6 +19,7 @@ interface User {
   skills?: string[];
   languages?: string[];
   profile_picture?: string;
+  bio?: string;
 }
 
 interface AuthContextType {
@@ -78,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("token");
     setToken(null);
     setUser(null);
-    router.push("/login");
+    router.push("/");
   };
 
   const updateUser = (userData: User) => {

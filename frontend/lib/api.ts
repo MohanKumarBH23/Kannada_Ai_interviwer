@@ -85,39 +85,6 @@ export async function deleteInterview(sessionId: string, token: string) {
   return response.json();
 }
 
-export async function updateProfile(data: any, token: string) {
-  const response = await fetch(`${API_BASE_URL}/auth/me`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    },
-    body: JSON.stringify(data),
-  });
-  if (!response.ok) throw new Error('Failed to update profile');
-  return response.json();
-}
-
-export async function analyzeResumeATS(file: File, token: string) {
-  const formData = new FormData();
-  formData.append('resume', file);
-
-  const response = await fetch(`${API_BASE_URL}/profile/resume`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`
-    },
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({ detail: 'Failed to analyze resume' }));
-    throw new Error(JSON.stringify(errorBody));
-  }
-
-  return response.json();
-}
-
 export async function getInterviewReport(sessionId: string, token: string) {
   const response = await fetch(`${API_BASE_URL}/interview/${sessionId}/report`, {
     headers: { 'Authorization': `Bearer ${token}` },
@@ -209,3 +176,69 @@ export async function getJobAnalytics(jobId: string, token: string) {
   return response.json();
 }
 
+export async function updateProfile(profileData: any, token: string) {
+  const response = await fetch(`${API_BASE_URL}/auth/me`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(profileData),
+  });
+  if (!response.ok) throw new Error('Failed to update profile');
+  return response.json();
+}
+
+export async function generateResume(token: string) {
+  const response = await fetch(`${API_BASE_URL}/auth/generate-resume`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    },
+  });
+  if (!response.ok) throw new Error('Failed to generate resume');
+  return response.json();
+}
+export async function uploadProfilePicture(file: File, token: string) {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await fetch(`${API_BASE_URL}/auth/profile-picture`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    },
+    body: formData,
+  });
+  if (!response.ok) throw new Error('Failed to upload picture');
+  return response.json();
+}
+
+export async function getAdminStats(token: string) {
+  const response = await fetch(`${API_BASE_URL}/admin/stats`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    },
+  });
+  if (!response.ok) throw new Error('Failed to fetch stats');
+  return response.json();
+}
+
+export async function getAllCandidates(token: string) {
+  const response = await fetch(`${API_BASE_URL}/admin/all-candidates`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    },
+  });
+  if (!response.ok) throw new Error('Failed to fetch candidates');
+  return response.json();
+}
+
+export async function getAnalytics(token: string) {
+  const response = await fetch(`${API_BASE_URL}/admin/analytics`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    },
+  });
+  if (!response.ok) throw new Error('Failed to fetch analytics');
+  return response.json();
+}

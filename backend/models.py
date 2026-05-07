@@ -4,10 +4,22 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    location: Optional[str] = None
+    experience: Optional[str] = None
+    skills: Optional[List[str]] = None
+    languages: Optional[List[str]] = None
+    bio: Optional[str] = None
+    resume_text: Optional[str] = None
+
+
 class UserCreate(BaseModel):
     name: str
     email: str
     password: str
+    role: Optional[str] = "user"
 
 
 class UserLogin(BaseModel):
@@ -24,25 +36,12 @@ class UserResponse(BaseModel):
     location: Optional[str] = None
     linkedin: Optional[str] = None
     github: Optional[str] = None
-    ats_score: Optional[int] = None
-    ats_feedback: Optional[str] = None
+    experience: Optional[str] = None
+    skills: Optional[List[str]] = None
+    languages: Optional[List[str]] = None
+    profile_picture: Optional[str] = None
+    bio: Optional[str] = None
     resume_text: Optional[str] = None
-    experience: Optional[str] = None
-    skills: Optional[List[str]] = None
-    languages: Optional[List[str]] = None
-    profile_picture: Optional[str] = None
-
-
-class UserUpdate(BaseModel):
-    name: Optional[str] = None
-    phone: Optional[str] = None
-    location: Optional[str] = None
-    linkedin: Optional[str] = None
-    github: Optional[str] = None
-    experience: Optional[str] = None
-    skills: Optional[List[str]] = None
-    languages: Optional[List[str]] = None
-    profile_picture: Optional[str] = None
 
 
 class Token(BaseModel):
