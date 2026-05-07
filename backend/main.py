@@ -210,7 +210,7 @@ async def upload_profile_picture(
 
 @app.get("/api/admin/stats")
 async def get_admin_stats(user: dict = Depends(read_users_me)):
-    if user.role not in ["admin", "recruiter"]:
+    if user.get("role") not in ["admin", "recruiter"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     
     total_jobs = await jobs_collection.count_documents({})
@@ -231,7 +231,7 @@ async def get_admin_stats(user: dict = Depends(read_users_me)):
 
 @app.get("/api/admin/all-candidates")
 async def get_all_candidates_admin(user: dict = Depends(read_users_me)):
-    if user.role not in ["admin", "recruiter"]:
+    if user.get("role") not in ["admin", "recruiter"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     
     cursor = candidates_collection.find({}).sort("created_at", -1)
@@ -257,7 +257,7 @@ async def get_all_candidates_admin(user: dict = Depends(read_users_me)):
 
 @app.get("/api/admin/analytics")
 async def get_admin_analytics(user: dict = Depends(read_users_me)):
-    if user.role not in ["admin", "recruiter"]:
+    if user.get("role") not in ["admin", "recruiter"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     
     # 1. Conversion Metrics
