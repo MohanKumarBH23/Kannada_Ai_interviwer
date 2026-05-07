@@ -1,52 +1,57 @@
 # Kannada AI Interview & Hiring Platform
 
-A premium, state-of-the-art AI-driven interview and recruitment platform designed specifically for the Kannada-speaking workforce. This system helps recruiters automate candidate screening and provides applicants with a seamless, bilingual (Kannada/English) interview experience.
+A premium, state-of-the-art AI-driven interview and recruitment platform designed specifically for the Kannada-speaking workforce. This system helps recruiters automate candidate screening and provides applicants with a seamless, bilingual (Kannada/English) interview and profile management experience.
 
 ## 🚀 Key Features
 
-### For Recruiters (Admin)
-- **ADD NEW JOB (Campaigns)**: Launch automated recruitment pipelines with custom job roles and eligibility criteria.
-- **Bulk AI Screening**: Upload candidate CSV files and let AI automatically evaluate eligibility based on job requirements.
-- **Telegram Automation**: Automated interview link delivery to the recruiter's Telegram for quick forwarding to selected candidates.
-- **Fuzzy CSV Parsing**: Smart CSV engine that recognizes common headers (Phone, Mobile, Name, etc.) and captures all data for AI context.
-- **Applicant Dashboard**: Manage candidates, view screening results, and monitor interview progress in real-time.
+### For Recruiters (Admin & Recruiter Roles)
+- **Advanced Dashboard Overview**: Real-time monitoring of active jobs, total applicants, interview counts, and AI screening efficiency.
+- **Realistic Performance Analytics**: Deep-dive insights into candidate performance, including average score distribution, highest/lowest scores, and hiring funnel conversion rates.
+- **My Job Posts**: Dedicated management suite for all job campaigns with quick-action stats and applicant tracking.
+- **Unified Candidate Management**: Centralized view of all applicants across all jobs, tracking their application status, AI interview scores, and contact details.
+- **Bulk AI Screening**: Upload candidate CSV files for automatic eligibility evaluation and interview link generation.
+- **Telegram Automation**: Instant interview link delivery for seamless candidate communication.
 
 ### For Candidates (Applicants)
+- **AI Profile Management**: Build a professional profile including experience, skills, and personal details.
+- **Photo Integration**: Upload profile headshots used for both the platform and generated resumes.
+- **Instant Resume Download (PDF)**: Convert your profile data directly into a beautifully formatted, professional PDF resume with one click.
 - **Interactive AI Interviews**: Real-time voice and text-based interviews in Kannada and English.
-- **Magic Link Access**: No account required! Candidates join interviews instantly via unique secure links sent via Telegram/WhatsApp.
-- **ATS Score Analysis**: Upload a PDF resume to get an instant ATS compatibility score and improvement suggestions.
-- **Bilingual Interface**: Seamless switching between Kannada and English for zero-friction interaction.
+- **Guided Career Wizard**: Step-by-step assistance in generating professional summaries and building career narratives.
 
 ## 🛠️ Tech Stack
 
 ### Frontend
 - **Framework**: Next.js 14 (App Router)
-- **Styling**: Tailwind CSS (Premium SaaS UI)
+- **Styling**: Tailwind CSS & Vanilla CSS (Premium SaaS UI)
 - **Icons**: Lucide React
-- **State Management**: React Context API
+- **PDF Generation**: Browser-side PDF rendering for instant resumes
 
 ### Backend
 - **Framework**: FastAPI (Python)
 - **Database**: MongoDB (Async Motor driver)
-- **AI Integration**: Gemini 2.0 Flash (via OpenRouter/Google)
-- **PDF Processing**: PyMuPDF (fitz)
-- **Messaging**: Telegram Bot API integration
+- **AI Integration**: Gemini 2.0 Flash (via OpenRouter/Google) for interview evaluation and profile generation.
+- **PDF Processing**: PyMuPDF (fitz) for resume parsing
+- **Messaging**: Telegram Bot API for automated notifications
 
 ## 📁 Project Structure
 
 ```text
 ├── backend/
-│   ├── main.py                # FastAPI core and hiring routes
-│   ├── ai_service.py          # AI logic and eligibility evaluation
-│   ├── messaging_service.py   # Telegram automation logic
-│   ├── database.py            # MongoDB connection & collections
+│   ├── main.py                # FastAPI core (Auth, Admin, Analytics, Jobs)
+│   ├── ai_service.py          # AI Narrative and Interview logic
+│   ├── messaging_service.py   # Telegram & Communication automation
+│   ├── database.py            # MongoDB connection logic
 │   ├── models.py              # Pydantic data models
 │   └── seed_usecases.py       # Sample job campaign data
 ├── frontend/
-│   ├── app/                   # Next.js pages (Hiring, Interview, Results)
-│   ├── components/            # Reusable SaaS components
-│   ├── context/               # Auth and Global state
-│   └── lib/                   # API utilities
+│   ├── app/                   
+│   │   ├── recruiter/         # Realistic Recruiter Dashboard & Analytics
+│   │   ├── candidate/         # AI Profile & Resume Wizard
+│   │   ├── profile/           # Profile Management & Photo Uploads
+│   │   └── interview/         # AI Interview Experience
+│   ├── context/               # Auth & User Context
+│   └── lib/                   # API Communication Layer
 └── README.md
 ```
 
@@ -55,55 +60,39 @@ A premium, state-of-the-art AI-driven interview and recruitment platform designe
 ### Prerequisites
 - Python 3.9+
 - Node.js 18+
-- MongoDB (Running locally on default port 27017)
+- MongoDB (Running locally on default port 27017 or MongoDB Atlas)
 
 ### Backend Setup
-1. Navigate to the backend directory:
-   ```bash
-   cd backend
-   ```
-2. Create and activate a virtual environment:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-3. Install dependencies:
+1. Navigate to `backend/` and install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
-4. Configure environment variables in `.env`:
+2. Configure `.env`:
    ```env
    MONGODB_URL=mongodb://localhost:27017
-   GEMINI_API_KEY=your_api_key
+   GEMINI_API_KEY=your_gemini_api_key
    FRONTEND_URL=http://localhost:3000
-   TELEGRAM_CHAT_ID=your_telegram_id (Use @userinfobot to get it)
+   TELEGRAM_BOT_TOKEN=your_bot_token
+   TELEGRAM_CHAT_ID=your_chat_id
    ```
-5. Seed the database with sample jobs:
-   ```bash
-   python seed_usecases.py
-   ```
-6. Run the server:
+3. Run the backend:
    ```bash
    uvicorn main:app --reload
    ```
 
 ### Frontend Setup
-1. Navigate to the frontend directory:
-   ```bash
-   cd frontend
-   ```
-2. Install dependencies:
+1. Navigate to `frontend/` and install dependencies:
    ```bash
    npm install
    ```
-3. Run the development server:
+2. Run the development server:
    ```bash
    npm run dev
    ```
 
-## 🔑 Admin Access
-To access the Recruiter Dashboard, log in with an admin account. You can create one using the registration page or a seed script.
-- **Recruiter URL**: `http://localhost:3000/hiring`
+## 🔑 Access Roles
+- **Candidate Access**: Register as a 'user' to build your profile, download your AI resume, and practice interviews.
+- **Recruiter Access**: Log in as 'admin' or 'recruiter' to access the full-featured dashboard, manage jobs, and view realistic performance analytics.
 
 ## 📄 License
 MIT License
