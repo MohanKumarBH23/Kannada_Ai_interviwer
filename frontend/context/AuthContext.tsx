@@ -7,6 +7,7 @@ interface User {
   id: string;
   name: string;
   email: string;
+  role: string;
   phone?: string;
   location?: string;
   linkedin?: string;
@@ -23,7 +24,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   token: string | null;
-  login: (token: string, userData: User) => void;
+  login: (token: string, userData: User, redirectTo?: string) => void;
   logout: () => void;
   updateUser: (userData: User) => void;
   loading: boolean;
@@ -66,11 +67,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const login = (newToken: string, userData: User) => {
+  const login = (newToken: string, userData: User, redirectTo: string = "/") => {
     localStorage.setItem("token", newToken);
     setToken(newToken);
     setUser(userData);
-    router.push("/");
+    router.push(redirectTo);
   };
 
   const logout = () => {

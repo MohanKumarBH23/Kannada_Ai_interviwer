@@ -43,7 +43,18 @@ export default function RegisterPage() {
       if (!userRes.ok) throw new Error("Failed to fetch user data");
       
       const userData = await userRes.json();
-      login(data.access_token, userData);
+      const searchParams = new URLSearchParams(window.location.search);
+      const redirectToParam = searchParams.get('redirectTo');
+      
+      let redirectTo = "/";
+      if (redirectToParam) {
+        redirectTo = redirectToParam;
+      } else {
+        const params = searchParams.toString();
+        if (params) redirectTo = `/?${params}`;
+      }
+      
+      login(data.access_token, userData, redirectTo);
       
     } catch (err: any) {
       setError(err.message);
@@ -133,7 +144,7 @@ export default function RegisterPage() {
 
         <p className="mt-8 text-center text-sm text-amazon-dark opacity-60">
           ಈಗಾಗಲೇ ಖಾತೆ ಇದೆಯೇ?{" "}
-          <Link href="/login" className="font-bold text-amazon-green hover:underline">
+          <Link href={`/login${typeof window !== 'undefined' ? window.location.search : ''}`} className="font-bold text-amazon-green hover:underline">
             ಲಾಗಿನ್ ಆಗಿ (Login here)
           </Link>
         </p>

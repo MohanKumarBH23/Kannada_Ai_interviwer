@@ -21,6 +21,11 @@ export default function NavBar() {
               <UserIcon className="w-4 h-4 text-amazon-green" />
               <span>{user.name}</span>
             </div>
+            {user.role === 'admin' && (
+              <Link href="/hiring" className="text-sm font-bold text-amazon-dark hover:text-amazon-green transition-colors">
+                Hiring
+              </Link>
+            )}
             <button
               onClick={logout}
               className="flex items-center gap-1 text-sm font-medium text-amazon-dark hover:text-red-600 transition-colors"

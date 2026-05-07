@@ -1,26 +1,29 @@
-from fastapi import FastAPI, HTTPException, Depends, File, UploadFile, Form
+from fastapi import FastAPI, HTTPException, Depends, File, UploadFile, Form, status
 from fastapi.middleware.cors import CORSMiddleware
+from typing import List, Optional
 from bson import ObjectId
 import os
+import asyncio
 import fitz
+import csv
+import io
 from fastapi.security import OAuth2PasswordBearer
+from datetime import datetime, timezone
+from dotenv import load_dotenv
 
+load_dotenv()
 
-from models import (
-    InterviewSession,
-    AnswerSubmit,
-    AnswerResponse,
-    UserCreate,
-    UserLogin,
-    UserResponse,
-    UserUpdate,
-    Token,
-)
-from database import interviews_collection, users_collection, question_bank_collection
+import models
 import ai_service
 import auth
-from datetime import datetime, timezone
-from fastapi import status
+from database import (
+    interviews_collection, 
+    users_collection, 
+    question_bank_collection,
+    jobs_collection,
+    candidates_collection
+)
+import messaging_service
 
 
 # Removed optional_oauth2_scheme as login is now mandatory.
@@ -48,8 +51,8 @@ app.add_middleware(
 )
 
 
-@app.post("/api/auth/register", response_model=Token)
-async def register(user: UserCreate):
+@app.post("/api/auth/register", response_model=models.Token)
+async def register(user: models.UserCreate):
     existing_user = await users_collection.find_one({"email": user.email})
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -75,8 +78,8 @@ async def register(user: UserCreate):
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-@app.post("/api/auth/login", response_model=Token)
-async def login(user_data: UserLogin):
+@app.post("/api/auth/login", response_model=models.Token)
+async def login(user_data: models.UserLogin):
     user = await users_collection.find_one({"email": user_data.email})
     if not user or not auth.verify_password(
         user_data.password, user["hashed_password"]
@@ -86,6 +89,13 @@ async def login(user_data: UserLogin):
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Automatically elevate admin@admin.com for testing/management
+    if user["email"] == "admin@admin.com" and user.get("role") != "admin":
+        await users_collection.update_one(
+            {"_id": user["_id"]}, {"$set": {"role": "admin"}}
+        )
+        user["role"] = "admin"
 
     access_token_expires = auth.timedelta(
         minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES
@@ -98,7 +108,7 @@ async def login(user_data: UserLogin):
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-@app.get("/api/auth/me", response_model=UserResponse)
+@app.get("/api/auth/me", response_model=models.UserResponse)
 async def read_users_me(token: str = Depends(auth.oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -121,10 +131,28 @@ async def read_users_me(token: str = Depends(auth.oauth2_scheme)):
     user["_id"] = str(user["_id"])
     return user
 
+async def get_current_user_optional(token: str = Depends(auth.oauth2_scheme_optional)):
+    if not token:
+        return None
+    try:
+        payload = auth.jwt.decode(
+            token, auth.SECRET_KEY, algorithms=[auth.ALGORITHM]
+        )
+        user_id: str | None = payload.get("user_id")
+        if user_id is None:
+            return None
+        user = await users_collection.find_one({"_id": ObjectId(user_id)})
+        if user:
+            user["_id"] = str(user["_id"])
+            return user
+    except:
+        return None
+    return None
 
-@app.put("/api/auth/me", response_model=UserResponse)
+
+@app.put("/api/auth/me", response_model=models.UserResponse)
 async def update_users_me(
-    user_update: UserUpdate, user: dict = Depends(read_users_me)
+    user_update: models.UserUpdate, user: dict = Depends(read_users_me)
 ):
     update_data = user_update.model_dump(exclude_unset=True)
     if not update_data:
@@ -141,7 +169,7 @@ async def update_users_me(
     return user
 
 
-@app.post("/api/profile/resume", response_model=UserResponse)
+@app.post("/api/profile/resume", response_model=models.UserResponse)
 async def upload_resume_for_ats(
     resume: UploadFile = File(...), user: dict = Depends(read_users_me)
 ):
@@ -260,14 +288,34 @@ async def get_available_roles(user: dict = Depends(read_users_me)):
     return {"roles": sorted(roles)}
 
 
-@app.post("/api/interview/start", response_model=InterviewSession)
+@app.post("/api/interview/start", response_model=models.InterviewSession, response_model_by_alias=True)
 async def start_interview(
     job_role: str = Form(...),
     difficulty: str = Form("medium"),
     resume: UploadFile = File(None),
-    user: dict = Depends(read_users_me),
+    job_id: str = Form(None),
+    candidate_id: str = Form(None),
+    is_practice: bool = Form(False),
+    user: Optional[dict] = Depends(get_current_user_optional),
 ):
-    user_id = user["_id"]
+    # Authentication check: if not a candidate, must be logged in
+    if not candidate_id and not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required to start an interview",
+        )
+    
+    user_id = user["_id"] if user else None
+
+    # If job_id is provided, override job_role with actual job title
+    if job_id:
+        try:
+            job = await jobs_collection.find_one({"_id": ObjectId(job_id)})
+            if job:
+                job_role = job.get("title", job_role)
+                print(f"DEBUG: Interview started for Job: {job_role}")
+        except Exception as e:
+            print(f"ERROR: Could not fetch job title: {e}")
 
 
     resume_text = None
@@ -303,6 +351,9 @@ async def start_interview(
         "difficulty": difficulty,
         "resume_text": resume_text,
         "user_id": user_id,
+        "job_id": job_id,
+        "candidate_id": candidate_id,
+        "is_practice": is_practice,
         "created_at": datetime.now(timezone.utc),
         "messages": [
             {
@@ -315,13 +366,25 @@ async def start_interview(
     }
 
     result = await interviews_collection.insert_one(new_session)
-    new_session["_id"] = str(result.inserted_id)
+    session_id = str(result.inserted_id)
+    new_session["_id"] = session_id
+
+    # Link session to candidate if provided
+    if candidate_id:
+        try:
+            await candidates_collection.update_one(
+                {"_id": ObjectId(candidate_id)},
+                {"$set": {"session_id": session_id, "status": "In Progress"}}
+            )
+            print(f"DEBUG: Linked session {session_id} to candidate {candidate_id}")
+        except Exception as e:
+            print(f"ERROR linking session to candidate: {e}")
 
     return new_session
 
 
-@app.get("/api/interview/{session_id}", response_model=InterviewSession)
-async def get_interview(session_id: str, user: dict = Depends(read_users_me)):
+@app.get("/api/interview/{session_id}", response_model=models.InterviewSession, response_model_by_alias=True)
+async def get_interview(session_id: str, user: Optional[dict] = Depends(get_current_user_optional)):
     session = await interviews_collection.find_one(
         {"_id": ObjectId(session_id)}
     )
@@ -330,20 +393,30 @@ async def get_interview(session_id: str, user: dict = Depends(read_users_me)):
             status_code=404, detail="Interview session not found"
         )
 
-    # Ownership check: User must be owner or admin
-    if session.get("user_id") != user["_id"] and user.get("role") != "admin":
+    # Ownership check: User must be owner, or it must be a candidate session, or user is admin
+    is_owner = user and session.get("user_id") == user["_id"]
+    is_admin = user and user.get("role") == "admin"
+    is_candidate_session = session.get("candidate_id") is not None
+    
+    if not is_owner and not is_admin and not is_candidate_session:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to access this session",
         )
 
     session["_id"] = str(session["_id"])
+    
+    # Restrict results: if it's a hiring interview, only admins see results
+    if session.get("job_id") and user.get("role") != "admin":
+        session.pop("score", None)
+        session.pop("feedback", None)
+        
     return session
 
 
 
-@app.post("/api/interview/answer", response_model=AnswerResponse)
-async def submit_answer(data: AnswerSubmit, user: dict = Depends(read_users_me)):
+@app.post("/api/interview/answer", response_model=models.AnswerResponse)
+async def submit_answer(data: models.AnswerSubmit, user: Optional[dict] = Depends(get_current_user_optional)):
     session = await interviews_collection.find_one(
         {"_id": ObjectId(data.session_id)}
     )
@@ -358,7 +431,11 @@ async def submit_answer(data: AnswerSubmit, user: dict = Depends(read_users_me))
         )
 
     # Ownership check
-    if session.get("user_id") != user["_id"]:
+    is_owner = user and session.get("user_id") == user["_id"]
+    is_admin = user and user.get("role") == "admin"
+    is_candidate_session = session.get("candidate_id") is not None
+
+    if not is_owner and not is_admin and not is_candidate_session:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to interact with this session",
@@ -423,7 +500,7 @@ async def submit_answer(data: AnswerSubmit, user: dict = Depends(read_users_me))
         },
     )
 
-    return AnswerResponse(
+    return models.AnswerResponse(
         feedback=ai_response.get("feedback", ""),
         next_question=ai_response.get("next_question"),
         is_completed=session.get("status") == "completed",
@@ -431,11 +508,11 @@ async def submit_answer(data: AnswerSubmit, user: dict = Depends(read_users_me))
     )
 
 
-@app.post("/api/interview/audio-answer", response_model=AnswerResponse)
+@app.post("/api/interview/audio-answer", response_model=models.AnswerResponse)
 async def submit_audio_answer(
     session_id: str = Form(...), 
     audio: UploadFile = File(...),
-    user: dict = Depends(read_users_me)
+    user: Optional[dict] = Depends(get_current_user_optional)
 ):
     content = await audio.read()
     mime_type = audio.content_type
@@ -444,12 +521,12 @@ async def submit_audio_answer(
     transcription = await ai_service.transcribe_audio(content, mime_type)
 
     # 2. Reuse the submit_answer logic (which now includes user)
-    data = AnswerSubmit(session_id=session_id, answer=transcription)
+    data = models.AnswerSubmit(session_id=session_id, answer=transcription)
     return await submit_answer(data, user)
 
 
-@app.post("/api/interview/{session_id}/stop", response_model=InterviewSession)
-async def stop_interview(session_id: str, user: dict = Depends(read_users_me)):
+@app.post("/api/interview/{session_id}/stop", response_model=models.InterviewSession, response_model_by_alias=True)
+async def stop_interview(session_id: str, user: Optional[dict] = Depends(get_current_user_optional)):
     session = await interviews_collection.find_one(
         {"_id": ObjectId(session_id)}
     )
@@ -464,7 +541,11 @@ async def stop_interview(session_id: str, user: dict = Depends(read_users_me)):
         )
 
     # Ownership check
-    if session.get("user_id") != user["_id"]:
+    is_owner = user and session.get("user_id") == user["_id"]
+    is_admin = user and user.get("role") == "admin"
+    is_candidate_session = session.get("candidate_id") is not None
+
+    if not is_owner and not is_admin and not is_candidate_session:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to stop this session",
@@ -529,6 +610,13 @@ async def get_interview_report(session_id: str, user: dict = Depends(read_users_
             detail="You do not have permission to access this session",
         )
 
+    # Hiring interview restriction: only admins see reports
+    if session.get("job_id") and user.get("role") != "admin":
+         raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Candidate results are restricted to the hiring team",
+        )
+
     if session.get("status") != "completed":
         raise HTTPException(status_code=400, detail="Interview is not yet completed")
 
@@ -549,3 +637,360 @@ async def get_interview_report(session_id: str, user: dict = Depends(read_users_
         "candidate_name": user.get("name", "Candidate"),
         **report,
     }
+
+@app.post("/api/admin/generate-job-info")
+async def api_generate_job_info(
+    data: dict, admin_user: dict = Depends(require_admin)
+):
+    title = data.get("title")
+    location = data.get("location")
+    if not title or not location:
+        raise HTTPException(status_code=400, detail="Title and Location are required")
+    
+    result = await ai_service.generate_job_info(title, location)
+    return result
+
+@app.get("/api/admin/analytics/{job_id}")
+async def get_job_analytics(job_id: str, admin_user: dict = Depends(require_admin)):
+    # 1. Fetch all candidates for this job
+    cursor = candidates_collection.find({"job_id": job_id})
+    candidates = await cursor.to_list(length=1000)
+    
+    total = len(candidates)
+    if total == 0:
+        return {
+            "total": 0,
+            "selected": 0,
+            "rejected": 0,
+            "in_progress": 0,
+            "avg_score": 0,
+            "rejection_reasons": []
+        }
+        
+    selected = sum(1 for c in candidates if c.get("selection_status") == "Selected")
+    rejected = sum(1 for c in candidates if c.get("selection_status") == "Rejected")
+    
+    # 2. Fetch all interview sessions to get scores and real status
+    session_cursor = interviews_collection.find({
+        "job_id": job_id,
+        "is_practice": {"$ne": True}
+    })
+    sessions = await session_cursor.to_list(length=1000)
+    
+    scores = [s.get("score") for s in sessions if s.get("score") is not None]
+    avg_score = sum(scores) / len(scores) if scores else 0
+    
+    in_progress = sum(1 for s in sessions if s.get("status") == "active")
+    completed = sum(1 for s in sessions if s.get("status") == "completed")
+    
+    # 3. Aggregate rejection reasons
+    reasons = {}
+    for c in candidates:
+        if c.get("selection_status") == "Rejected":
+            reason = c.get("eligibility_reason", "Other")
+            # Simple normalization: take first part before "|||"
+            short_reason = reason.split("|||")[0].strip()
+            reasons[short_reason] = reasons.get(short_reason, 0) + 1
+            
+    sorted_reasons = sorted(reasons.items(), key=lambda x: x[1], reverse=True)[:3]
+    rejection_summary = [{"reason": r, "count": c} for r, c in sorted_reasons]
+    
+    return {
+        "total": total,
+        "selected": selected,
+        "rejected": rejected,
+        "in_progress": in_progress,
+        "completed": completed,
+        "avg_score": round(avg_score, 1),
+        "rejection_reasons": rejection_summary
+    }
+
+# Hiring Endpoints
+@app.post("/api/jobs", response_model=models.Job, response_model_by_alias=True)
+async def create_job(job: models.JobCreate, admin_user: dict = Depends(require_admin)):
+    job_data = job.model_dump()
+    job_data["created_at"] = datetime.now(timezone.utc)
+    job_data["is_active"] = True
+    job_data["recruiter_id"] = str(admin_user["_id"])
+    
+    result = await jobs_collection.insert_one(job_data)
+    job_data["_id"] = str(result.inserted_id)
+    return job_data
+
+@app.get("/api/jobs")
+async def get_jobs():
+    cursor = jobs_collection.find({}).sort("created_at", -1)
+    jobs = await cursor.to_list(length=100)
+    for j in jobs:
+        j["_id"] = str(j["_id"])
+    return jobs
+
+@app.delete("/api/jobs/{job_id}")
+async def delete_job(job_id: str, admin_user: dict = Depends(require_admin)):
+    # 1. Delete associated candidates
+    await candidates_collection.delete_many({"job_id": job_id})
+    # 2. Delete associated interviews
+    await interviews_collection.delete_many({"job_id": job_id})
+    # 3. Delete the job
+    result = await jobs_collection.delete_one({"_id": ObjectId(job_id)})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Job not found")
+        
+    return {"message": "Job and all associated data deleted successfully"}
+
+@app.get("/api/candidates/{job_id}", response_model=List[models.Candidate], response_model_by_alias=True)
+async def get_candidates(job_id: str):
+    cursor = candidates_collection.find({"job_id": job_id}).sort("created_at", -1)
+    candidates = await cursor.to_list(length=100)
+    for c in candidates:
+        c["_id"] = str(c["_id"])
+        # Find if there is an interview session for this candidate
+        session = await interviews_collection.find_one({"candidate_id": c["_id"]})
+        if session:
+            c["session_id"] = str(session["_id"])
+            c["status"] = session.get("status", "Pending")
+            c["ai_score"] = session.get("score")
+    return candidates
+
+@app.post("/api/jobs/{job_id}/candidates/csv")
+async def upload_candidates_csv(job_id: str, file: UploadFile = File(...), admin_user: dict = Depends(require_admin)):
+    # Fetch job to get eligibility criteria
+    job = await jobs_collection.find_one({"_id": ObjectId(job_id)})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    eligibility_criteria = job.get("eligibility", "General requirements")
+    
+    content = await file.read()
+    decoded = content.decode('utf-8')
+    io_string = io.StringIO(decoded)
+    reader = csv.DictReader(io_string)
+    
+    candidate_docs = []
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+    
+    for row in reader:
+        candidate_data = {
+            "name": row.get("name", "Unknown"),
+            "phone": row.get("phone", ""),
+            "email": row.get("email"),
+            "experience": row.get("experience"),
+            "location": row.get("location"),
+            "other_details": row.get("other_details", "")
+        }
+        
+        # Evaluate eligibility using AI
+        eval_result = await ai_service.evaluate_candidate_eligibility(eligibility_criteria, candidate_data)
+        
+        is_eligible = eval_result.get("is_eligible", False)
+        selection_status = "Selected" if is_eligible else "Rejected"
+        
+        # Generate unique interview link
+        candidate_id = str(ObjectId())
+        interview_link = f"{frontend_url}/interview/start?candidate_id={candidate_id}&job_id={job_id}"
+        
+        candidate_docs.append({
+            "_id": ObjectId(candidate_id),
+            **candidate_data,
+            "job_id": job_id,
+            "status": "Pending",
+            "selection_status": selection_status,
+            "eligibility_reason": eval_result.get("reason"),
+            "interview_link": interview_link if is_eligible else None,
+            "created_at": datetime.now(timezone.utc)
+        })
+    
+    if candidate_docs:
+        await candidates_collection.insert_many(candidate_docs)
+    
+    return {"message": f"Processed {len(candidate_docs)} candidates. {sum(1 for c in candidate_docs if c['selection_status'] == 'Selected')} candidates selected."}
+
+@app.post("/api/recruitment/bulk")
+async def bulk_recruitment_pipeline(
+    title: str = Form(...),
+    location: str = Form(...),
+    salary: str = Form(...),
+    description: str = Form(...),
+    requirements: str = Form(...),
+    eligibility: str = Form(...),
+    notify: str = Form("false"),
+    file: UploadFile = File(...),
+    admin_user: dict = Depends(require_admin)
+):
+    try:
+        # Convert notify string to bool
+        should_notify = notify.lower() == "true"
+        
+        print(f"DEBUG: [BulkPipeline] Starting for '{title}' (Notify: {should_notify})")
+        
+        # 1. Create Job record
+        job_data = {
+            "title": title,
+            "location": location,
+            "salary": salary,
+            "description": description,
+            "requirements": requirements,
+            "eligibility": eligibility,
+            "created_at": datetime.now(timezone.utc),
+            "is_active": True,
+            "recruiter_id": str(admin_user["_id"])
+        }
+        
+        try:
+            job_result = await jobs_collection.insert_one(job_data)
+            job_id = str(job_result.inserted_id)
+            print(f"DEBUG: [BulkPipeline] Created Job with ID: {job_id}")
+        except Exception as db_err:
+            print(f"ERROR: [BulkPipeline] Failed to create job in DB: {db_err}")
+            raise HTTPException(status_code=500, detail="Database error during job creation")
+        
+        # 2. Process CSV
+        try:
+            content = await file.read()
+            if not content:
+                raise ValueError("Empty file")
+                
+            try:
+                decoded = content.decode('utf-8')
+            except UnicodeDecodeError:
+                decoded = content.decode('latin-1')
+                
+            io_string = io.StringIO(decoded)
+            reader = csv.DictReader(io_string)
+            rows = [row for row in reader if any(row.values())] # Filter empty rows
+            print(f"DEBUG: [BulkPipeline] CSV parsed. Found {len(rows)} candidates.")
+        except Exception as e:
+            print(f"ERROR: [BulkPipeline] CSV processing failed: {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid CSV file: {str(e)}")
+        
+        if not rows:
+            return {
+                "job_id": job_id,
+                "total_processed": 0,
+                "selected_count": 0,
+                "notified_count": 0,
+                "message": "No candidates found in CSV"
+            }
+        
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+        
+        # Semaphore to limit concurrent AI calls (avoid rate limits)
+        sem = asyncio.Semaphore(3)
+        
+        async def process_candidate(row):
+            async with sem:
+                # Helper to find column by multiple possible names
+                def get_field(names, default=None):
+                    for name in names:
+                        # Try exact, lowercase, and stripped versions
+                        for k in row.keys():
+                            if k.lower().strip() == name.lower():
+                                return row[k]
+                    return default
+
+                # Standard fields with fuzzy mapping
+                name = get_field(["name", "full name", "candidate name", "applicant name", "candidate"], "Unknown")
+                phone = get_field(["phone", "mobile", "contact", "phone number", "mobile number", "contact number"], "")
+                email = get_field(["email", "email address", "mail"], "")
+                location = get_field(["location", "city", "address", "current location"], "")
+                experience = get_field(["experience", "years of experience", "exp", "work experience"], "")
+
+                # Capture ALL columns into other_details so AI has full context
+                all_details = []
+                for k, v in row.items():
+                    if v:
+                        all_details.append(f"{k}: {v}")
+                
+                candidate_data = {
+                    "name": name,
+                    "phone": str(phone),
+                    "email": email,
+                    "experience": experience,
+                    "location": location,
+                    "other_details": " | ".join(all_details)
+                }
+                
+                try:
+                    # Evaluate eligibility using AI
+                    eval_result = await ai_service.evaluate_candidate_eligibility(eligibility, candidate_data)
+                    is_eligible = eval_result.get("is_eligible", False)
+                    selection_status = "Selected" if is_eligible else "Rejected"
+                    reason = eval_result.get("reason", "No reason provided")
+                except Exception as ai_err:
+                    print(f"WARNING: [BulkPipeline] AI evaluation failed for {candidate_data['name']}: {ai_err}")
+                    is_eligible = False
+                    selection_status = "Error"
+                    reason = "Evaluation failed due to AI service error"
+                
+                candidate_id = str(ObjectId())
+                interview_link = f"{frontend_url}/interview/start?candidate_id={candidate_id}&job_id={job_id}"
+                
+                notified = False
+                if is_eligible and should_notify and candidate_data["phone"]:
+                    try:
+                        await messaging_service.send_interview_link(
+                            candidate_data["name"], 
+                            candidate_data["phone"], 
+                            interview_link
+                        )
+                        notified = True
+                    except Exception as msg_err:
+                        print(f"WARNING: [BulkPipeline] Failed to notify {candidate_data['name']}: {msg_err}")
+                
+                return {
+                    "doc": {
+                        "_id": ObjectId(candidate_id),
+                        **candidate_data,
+                        "job_id": job_id,
+                        "status": "Pending",
+                        "selection_status": selection_status,
+                        "eligibility_reason": reason,
+                        "interview_link": interview_link if is_eligible else None,
+                        "created_at": datetime.now(timezone.utc)
+                    },
+                    "is_selected": is_eligible,
+                    "is_notified": notified
+                }
+
+        # Process all candidates
+        print(f"DEBUG: [BulkPipeline] Starting AI evaluations for {len(rows)} candidates...")
+        results = await asyncio.gather(*[process_candidate(row) for row in rows], return_exceptions=True)
+        
+        # Filter out exceptions from gather
+        valid_results = []
+        for res in results:
+            if isinstance(res, Exception):
+                print(f"ERROR: [BulkPipeline] A candidate task failed completely: {res}")
+            else:
+                valid_results.append(res)
+        
+        candidate_docs = [r["doc"] for r in valid_results]
+        selected_count = sum(1 for r in valid_results if r["is_selected"])
+        notified_count = sum(1 for r in valid_results if r["is_notified"])
+        
+        if candidate_docs:
+            try:
+                await candidates_collection.insert_many(candidate_docs)
+            except Exception as db_err:
+                print(f"ERROR: [BulkPipeline] Failed to insert candidates: {db_err}")
+                # We already created the job, so we return what we have but with an error message
+                return {
+                    "job_id": job_id,
+                    "total_processed": 0,
+                    "error": "Failed to save candidates to database"
+                }
+        
+        print(f"DEBUG: [BulkPipeline] Completed. Total: {len(candidate_docs)}, Selected: {selected_count}")
+        
+        return {
+            "job_id": job_id,
+            "total_processed": len(candidate_docs),
+            "selected_count": selected_count,
+            "notified_count": notified_count
+        }
+    except Exception as e:
+        print(f"CRITICAL ERROR in bulk_recruitment_pipeline: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Pipeline error: {str(e)}")

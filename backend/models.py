@@ -60,6 +60,7 @@ class InterviewSessionCreate(BaseModel):
 
     job_role: str
     difficulty: str = "medium"  # easy, medium, hard
+    is_practice: bool = False
 
 
 class InterviewSession(BaseModel):
@@ -73,6 +74,9 @@ class InterviewSession(BaseModel):
     score: Optional[int] = None
     resume_text: Optional[str] = None
     user_id: Optional[str] = None
+    job_id: Optional[str] = None
+    candidate_id: Optional[str] = None
+    is_practice: bool = False
 
 
 class AnswerSubmit(BaseModel):
@@ -99,3 +103,45 @@ class TrainingQuestion(BaseModel):
     category: str            # DSA | System Design | Behavioral | Technical | HR
     question: str
     ideal_answer_hints: List[str]
+
+class JobBase(BaseModel):
+    title: str
+    location: str
+    salary: str
+    description: str
+    requirements: str
+    eligibility: str
+
+class JobCreate(JobBase):
+    pass
+
+class Job(JobBase):
+    id: str = Field(alias="_id")
+    is_active: bool = True
+    created_at: datetime
+    recruiter_id: Optional[str] = None
+
+class CandidateBase(BaseModel):
+    name: str
+    phone: str
+    email: Optional[str] = None
+    experience: Optional[str] = None
+    location: Optional[str] = None
+    other_details: Optional[str] = None
+
+class CandidateCreate(CandidateBase):
+    job_id: str
+
+class Candidate(CandidateBase):
+    id: str = Field(alias="_id")
+    job_id: str
+    status: str
+    selection_status: Optional[str] = "Pending"  # Selected | Rejected | Pending
+    eligibility_reason: Optional[str] = None
+    interview_link: Optional[str] = None
+    ai_score: Optional[int] = None
+    ai_suitability: Optional[str] = None
+    ai_summary: Optional[str] = None
+    interview_completed_at: Optional[datetime] = None
+    session_id: Optional[str] = None
+    created_at: datetime

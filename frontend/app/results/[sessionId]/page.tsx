@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getInterviewSession, getInterviewReport } from "@/lib/api";
-import { Trophy, Home, Loader2, Star, Download, TrendingUp, TrendingDown, Minus, Shield, Award, AlertTriangle, CheckCircle, BarChart3, FileText, Sparkles } from "lucide-react";
+import { Trophy, Home, Loader2, Star, Download, TrendingUp, TrendingDown, Minus, Shield, Award, AlertTriangle, CheckCircle, CheckCircle2, BarChart3, FileText, Sparkles } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 interface QABreakdown {
@@ -38,15 +38,13 @@ export default function ResultsPage({ params }: { params: { sessionId: string } 
   const [showReport, setShowReport] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!authLoading && !user) router.push("/login");
-  }, [user, authLoading, router]);
+  // Removed mandatory login check to allow guest candidate access
 
   useEffect(() => {
     const fetchSession = async () => {
-      if (!token) return;
+    // We allow fetching even without a token for guest candidate access
       try {
-        const data = await getInterviewSession(params.sessionId, token);
+        const data = await getInterviewSession(params.sessionId, token || "");
         setSession(data);
       } catch (err) {
         console.error(err);
@@ -76,12 +74,41 @@ export default function ResultsPage({ params }: { params: { sessionId: string } 
     window.print();
   };
 
-  if (authLoading || loading || !user) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-10 h-10 animate-spin text-teal-600" />
           <p className="text-slate-500 font-medium">ಲೋಡ್ ಆಗುತ್ತಿದೆ...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Check if results are hidden (Hide for guests/non-admins, or if it's a candidate interview)
+  const isResultsHidden = (!user || user.role !== "admin") || (session?.candidate_id && user?.role !== "admin");
+
+  if (isResultsHidden) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+        <div className="max-w-2xl w-full bg-white rounded-[2.5rem] shadow-xl p-12 text-center space-y-8 animate-fade-in">
+          <div className="w-24 h-24 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <CheckCircle2 className="w-12 h-12 text-emerald-600" />
+          </div>
+          <h1 className="text-4xl font-black text-slate-900 leading-tight">
+            ಸಂದರ್ಶನ ಪೂರ್ಣಗೊಂಡಿದೆ!<br />
+            (Interview Completed!)
+          </h1>
+          <p className="text-slate-500 text-lg font-medium leading-relaxed">
+            ನಿಮ್ಮ ಸಮಯಕ್ಕಾಗಿ ಧನ್ಯವಾದಗಳು. ನಿಮ್ಮ ಸಂದರ್ಶನದ ಉತ್ತರಗಳನ್ನು ನಾವು ಸ್ವೀಕರಿಸಿದ್ದೇವೆ. ನಮ್ಮ ನೇಮಕಾತಿ ತಂಡವು ಶೀಘ್ರದಲ್ಲೇ ನಿಮ್ಮನ್ನು ಸಂಪರ್ಕಿಸುತ್ತದೆ.<br />
+            <span className="text-sm opacity-70">Thank you for your time. We have received your interview responses. Our hiring team will contact you shortly.</span>
+          </p>
+          <button
+            onClick={() => router.push("/")}
+            className="px-10 py-4 bg-gradient-to-r from-teal-600 to-emerald-600 text-white font-bold rounded-2xl shadow-lg shadow-teal-600/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+          >
+            Dashboard ಗೆ ಹಿಂತಿರುಗಿ (Back to Dashboard)
+          </button>
         </div>
       </div>
     );

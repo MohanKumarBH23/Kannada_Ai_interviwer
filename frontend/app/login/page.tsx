@@ -31,7 +31,15 @@ export default function LoginPage() {
 
       if (!res.ok) {
         const errorData = await res.json();
-        throw new Error(errorData.detail || "Login failed");
+        let errorMessage = "Login failed";
+        if (errorData.detail) {
+          if (Array.isArray(errorData.detail)) {
+            errorMessage = errorData.detail.map((e: any) => e.msg || JSON.stringify(e)).join(", ");
+          } else {
+            errorMessage = errorData.detail;
+          }
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await res.json();
@@ -40,13 +48,28 @@ export default function LoginPage() {
         headers: { Authorization: `Bearer ${data.access_token}` },
       });
 
-      if (!userRes.ok) throw new Error("Failed to fetch user data");
+      if (!userRes.ok) {
+        const errorData = await userRes.json();
+        throw new Error(errorData.detail || "Failed to fetch user data");
+      }
 
       const userData = await userRes.json();
-      login(data.access_token, userData);
+      const searchParams = new URLSearchParams(window.location.search);
+      const redirectToParam = searchParams.get('redirectTo');
+      
+      let redirectTo = "/";
+      if (redirectToParam) {
+        redirectTo = redirectToParam;
+      } else {
+        const params = searchParams.toString();
+        if (params) redirectTo = `/?${params}`;
+      }
+      
+      login(data.access_token, userData, redirectTo);
 
     } catch (err: any) {
-      setError(err.message);
+      console.error("Login error:", err);
+      setError(err.message || "An unexpected error occurred");
     } finally {
       setIsLoading(false);
     }
@@ -164,7 +187,7 @@ export default function LoginPage() {
           </div>
 
           <Link
-            href="/register"
+            href={`/register${typeof window !== 'undefined' ? window.location.search : ''}`}
             className="w-full flex items-center justify-center py-4 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-sm rounded-2xl font-medium transition-all"
           >
             ಹೊಸ ಖಾತೆ ರಚಿಸಿ (Create account)

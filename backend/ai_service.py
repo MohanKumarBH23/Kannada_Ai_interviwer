@@ -477,3 +477,109 @@ async def generate_interview_report(job_role: str, messages: list, overall_feedb
             "qa_breakdown": [],
             "recommendation": "ಮಾಹಿತಿ ಲಭ್ಯವಿಲ್ಲ ||| Info not available",
         }
+
+async def evaluate_candidate_eligibility(eligibility_criteria: str, candidate_data: dict) -> dict:
+    """
+    Evaluates a candidate against job eligibility criteria using AI.
+    """
+    if not is_configured or not client:
+        # Mock evaluation if AI not configured
+        return {
+            "is_eligible": True,
+            "reason": "ನಿಮ್ಮ ಅನುಭವವು ಈ ಕೆಲಸಕ್ಕೆ ಸೂಕ್ತವಾಗಿದೆ. (Your experience is suitable for this job.)"
+        }
+
+    prompt = f"""
+    You are an expert recruiter. Evaluate this candidate for eligibility based on the given criteria.
+    
+    Eligibility Criteria:
+    {eligibility_criteria}
+    
+    Candidate Data:
+    Name: {candidate_data.get('name')}
+    Experience: {candidate_data.get('experience')}
+    Location: {candidate_data.get('location')}
+    Other Details: {candidate_data.get('other_details', 'N/A')}
+    
+    Determine if the candidate is eligible. 
+    Provide:
+    1. is_eligible: boolean
+    2. reason: A brief reason in Kannada ||| English translation.
+    
+    Return ONLY a valid JSON object:
+    {{
+        "is_eligible": boolean,
+        "reason": "Brief reason in Kannada ||| English"
+    }}
+    """
+
+    try:
+        response = await call_ai_with_retry(
+            client.chat.completions.create,
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"}
+        )
+        text = response.choices[0].message.content.strip()
+        data = json.loads(text)
+        return {
+            "is_eligible": data.get("is_eligible", False),
+            "reason": data.get("reason", "ಅನರ್ಹ (Ineligible)")
+        }
+    except Exception as e:
+        print(f"Error evaluating eligibility: {e}")
+        return {"is_eligible": False, "reason": "ಮೌಲ್ಯಮಾಪನ ದೋಷ (Evaluation error)"}
+
+async def generate_job_info(title: str, location: str) -> dict:
+    """
+    Generates Job Description, Requirements, and Eligibility criteria using AI.
+    """
+    if not is_configured or not client:
+        return {
+            "description": f"This is a role for a {title} in {location}. You will be responsible for handling day-to-day operations and ensuring high quality service.",
+            "requirements": "• Good communication skills\n• Punctuality and dedication\n• Ability to work in a team",
+            "eligibility": "• Minimum 18 years of age\n• Basic understanding of the role\n• Local language proficiency"
+        }
+
+    prompt = f"""
+    You are an expert recruiter for the Indian job market, specifically focusing on roles in {location}.
+    Generate professional job details for the following position:
+    
+    Job Title: {title}
+    Location: {location}
+    
+    Provide:
+    1. A concise Job Description (2-3 sentences).
+    2. 3-4 specific Focus Areas/Skills the AI Interviewer should test for (as a bulleted list).
+    3. Clear, strict Eligibility Criteria for candidate screening (e.g., experience, location, specific certifications).
+    
+    Return ONLY a valid JSON object:
+    {{
+        "description": "Job description here...",
+        "requirements": "Focus areas list here...",
+        "eligibility": "Eligibility criteria here..."
+    }}
+    """
+
+    try:
+        response = await call_ai_with_retry(
+            client.chat.completions.create,
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"}
+        )
+        text = response.choices[0].message.content.strip()
+        data = json.loads(text)
+        return {
+            "description": data.get("description", ""),
+            "requirements": data.get("requirements", ""),
+            "eligibility": data.get("eligibility", "")
+        }
+    except Exception as e:
+        print(f"Error generating job info: {e}")
+        return {
+            "description": "",
+            "requirements": "",
+            "eligibility": ""
+        }
+

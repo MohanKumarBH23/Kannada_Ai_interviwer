@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getInterviewSession, submitAnswer, submitAudioAnswer, stopInterview, deleteInterview } from "@/lib/api";
-import { Send, Bot, User, Loader2, Mic, Square, Trash2, LogOut, CheckCircle2, AlertCircle, ArrowLeft } from "lucide-react";
+import { Send, Bot, User, Loader2, Mic, Square, Trash2, LogOut, CheckCircle2, AlertCircle, ArrowLeft, Sparkles } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 export default function InterviewPage({ params }: { params: { sessionId: string } }) {
@@ -19,11 +19,7 @@ export default function InterviewPage({ params }: { params: { sessionId: string 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/login");
-    }
-  }, [user, authLoading, router]);
+  // Removed mandatory login check to allow guest candidate access
 
   const startRecording = async () => {
     try {
@@ -87,7 +83,7 @@ export default function InterviewPage({ params }: { params: { sessionId: string 
   };
 
   const fetchSession = async () => {
-    if (!token) return;
+    // We allow fetching even without a token for guest candidate access
     try {
       const data = await getInterviewSession(params.sessionId, token);
       if (data.status === "completed") {
@@ -134,7 +130,6 @@ export default function InterviewPage({ params }: { params: { sessionId: string 
   };
 
   const executeStop = async () => {
-    if (!token) return;
     setConfirmType(null);
     setLoading(true);
     try {
@@ -152,7 +147,6 @@ export default function InterviewPage({ params }: { params: { sessionId: string 
   };
 
   const executeDelete = async () => {
-    if (!token) return;
     setConfirmType(null);
     setLoading(true);
     try {
@@ -165,7 +159,7 @@ export default function InterviewPage({ params }: { params: { sessionId: string 
     }
   };
 
-  if (authLoading || loading || !user) {
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 gap-4">
         <div className="relative w-16 h-16">
@@ -211,6 +205,14 @@ export default function InterviewPage({ params }: { params: { sessionId: string 
           <span>Finish Interview</span>
         </button>
       </nav>
+
+      {session?.is_practice && (
+        <div className="fixed top-24 left-0 right-0 z-40 bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-2 px-8 text-center text-xs font-black tracking-[0.2em] uppercase shadow-lg animate-fade-in flex items-center justify-center gap-4">
+          <Sparkles className="w-3 h-3" />
+          <span>Practice Mode Active — This session is not recorded for recruiters</span>
+          <Sparkles className="w-3 h-3" />
+        </div>
+      )}
 
       <main className="flex-1 pt-28 pb-8 px-4 md:px-12 flex flex-col items-center h-[calc(100vh-6rem)] overflow-hidden">
         <div className="w-full max-w-6xl flex-1 bg-white rounded-[2rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.08)] overflow-hidden border border-white/60 flex flex-col relative z-10 backdrop-blur-sm animate-fade-in">

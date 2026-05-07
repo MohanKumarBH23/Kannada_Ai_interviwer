@@ -70,9 +70,33 @@ export default function Home() {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push("/login");
+      const params = window.location.search;
+      router.push(`/login${params}`);
     }
   }, [user, authLoading, router]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const candidateId = params.get('candidate_id');
+    const jobIdParam = params.get('job_id');
+
+    if (candidateId && jobIdParam && token && !loading) {
+      // Auto-start interview for invited candidate
+      autoStartInterview(candidateId, jobIdParam);
+    }
+  }, [token]);
+
+  const autoStartInterview = async (candidateId: string, jobIdParam: string) => {
+    setLoading(true);
+    try {
+      // We can use a default role, the backend will fetch the real title using jobIdParam
+      const session = await startInterview("Job Applicant", "medium", null, token || undefined, jobIdParam, candidateId);
+      router.push(`/interview/${session._id || session.id}?candidate_id=${candidateId}&job_id=${jobIdParam}`);
+    } catch (err) {
+      setError("Failed to auto-start interview.");
+      setLoading(false);
+    }
+  };
 
   if (authLoading || !user) {
     return (
@@ -88,9 +112,20 @@ export default function Home() {
     setError("");
     try {
       const session = await startInterview(jobRole, difficulty, resumeFile, token || undefined);
-      router.push(`/interview/${session._id}`);
+      router.push(`/interview/${session._id || session.id}`);
     } catch (err) {
       setError("ಸಂದರ್ಶನ ಪ್ರಾರಂಭಿಸಲು ವಿಫಲವಾಗಿದೆ (Failed to start interview). ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.");
+      setLoading(false);
+    }
+  };
+
+  const handlePractice = async () => {
+    setLoading(true);
+    try {
+      const session = await startInterview("ಸಾಮಾನ್ಯ ಅಭ್ಯಾಸ (General Practice)", "medium", null, token || undefined, undefined, undefined, true);
+      router.push(`/interview/${session._id || session.id}`);
+    } catch (err) {
+      setError("ಅಭ್ಯಾಸ ಮೋಡ್ ಪ್ರಾರಂಭಿಸಲು ವಿಫಲವಾಗಿದೆ (Failed to start practice mode).");
       setLoading(false);
     }
   };
@@ -300,6 +335,24 @@ export default function Home() {
               <Layout className="w-5 h-5" />
               ಸರಳ ರೆಸ್ಯೂಮ್
             </button>
+
+            <button
+              onClick={handlePractice}
+              className="flex items-center gap-3 px-5 py-4 rounded-xl font-semibold transition-all text-emerald-600 hover:bg-emerald-50 border border-emerald-100 mt-4 shadow-sm"
+            >
+              <Sparkles className="w-5 h-5" />
+              ಅಭ್ಯಾಸ ಮೋಡ್ (Practice)
+            </button>
+
+            {user.role === "admin" && (
+              <Link
+                href="/hiring"
+                className="flex items-center gap-3 px-5 py-4 rounded-xl font-semibold transition-all text-slate-600 hover:bg-slate-50 border-t border-slate-50 mt-2"
+              >
+                <Briefcase className="w-5 h-5 text-teal-600" />
+                ನೇಮಕಾತಿ (Hiring)
+              </Link>
+            )}
           </nav>
         </div>
 
