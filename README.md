@@ -1,49 +1,52 @@
-# Kannada AI Interview System
+# Kannada AI Interview & Hiring Platform
 
-A premium, state-of-the-art AI-driven interview preparation platform designed specifically for the Kannada-speaking workforce. This system helps candidates, including blue-collar workers, prepare for job interviews through interactive AI sessions, resume building, and detailed performance analysis.
+A premium, state-of-the-art AI-driven interview and recruitment platform designed specifically for the Kannada-speaking workforce. This system helps recruiters automate candidate screening and provides applicants with a seamless, bilingual (Kannada/English) interview experience.
 
-## 🚀 Features
+## 🚀 Key Features
 
+### For Recruiters (Admin)
+- **ADD NEW JOB (Campaigns)**: Launch automated recruitment pipelines with custom job roles and eligibility criteria.
+- **Bulk AI Screening**: Upload candidate CSV files and let AI automatically evaluate eligibility based on job requirements.
+- **Telegram Automation**: Automated interview link delivery to the recruiter's Telegram for quick forwarding to selected candidates.
+- **Fuzzy CSV Parsing**: Smart CSV engine that recognizes common headers (Phone, Mobile, Name, etc.) and captures all data for AI context.
+- **Applicant Dashboard**: Manage candidates, view screening results, and monitor interview progress in real-time.
+
+### For Candidates (Applicants)
 - **Interactive AI Interviews**: Real-time voice and text-based interviews in Kannada and English.
-- **Simple Resume Builder**: A dedicated tool for users without traditional resumes (especially blue-collar roles) to create a professional digital profile.
-- **ATS Score Analysis**: Upload a PDF resume to get an instant ATS compatibility score and detailed improvement suggestions.
-- **Comprehensive Performance Reports**: Detailed PDF reports after interviews featuring:
-  - Overall Score
-  - Confidence Analysis (AI-driven)
-  - Strengths & Improvement Areas
-  - Question-by-Question Breakdown
-- **Bilingual Support**: Full support for Kannada and English throughout the application.
-- **Secure Authentication**: JWT-based login and registration system.
+- **Magic Link Access**: No account required! Candidates join interviews instantly via unique secure links sent via Telegram/WhatsApp.
+- **ATS Score Analysis**: Upload a PDF resume to get an instant ATS compatibility score and improvement suggestions.
+- **Bilingual Interface**: Seamless switching between Kannada and English for zero-friction interaction.
 
 ## 🛠️ Tech Stack
 
 ### Frontend
 - **Framework**: Next.js 14 (App Router)
-- **Styling**: Tailwind CSS
+- **Styling**: Tailwind CSS (Premium SaaS UI)
 - **Icons**: Lucide React
-- **State Management**: React Context API (Auth)
+- **State Management**: React Context API
 
 ### Backend
 - **Framework**: FastAPI (Python)
 - **Database**: MongoDB (Async Motor driver)
-- **AI Integration**: OpenRouter (Gemini 2.0 Flash)
+- **AI Integration**: Gemini 2.0 Flash (via OpenRouter/Google)
 - **PDF Processing**: PyMuPDF (fitz)
-- **Security**: bcrypt for password hashing, PyJWT for tokens
+- **Messaging**: Telegram Bot API integration
 
 ## 📁 Project Structure
 
 ```text
 ├── backend/
-│   ├── main.py            # FastAPI application routes
-│   ├── ai_service.py      # AI logic and integrations
-│   ├── models.py          # Pydantic data models
-│   ├── auth.py            # JWT and Hashing utilities
-│   └── training_data.py   # Domain-specific question bank
+│   ├── main.py                # FastAPI core and hiring routes
+│   ├── ai_service.py          # AI logic and eligibility evaluation
+│   ├── messaging_service.py   # Telegram automation logic
+│   ├── database.py            # MongoDB connection & collections
+│   ├── models.py              # Pydantic data models
+│   └── seed_usecases.py       # Sample job campaign data
 ├── frontend/
-│   ├── app/               # Next.js pages and layouts
-│   ├── components/        # Reusable UI components
-│   ├── context/           # Auth and Global state
-│   └── lib/               # API utilities
+│   ├── app/                   # Next.js pages (Hiring, Interview, Results)
+│   ├── components/            # Reusable SaaS components
+│   ├── context/               # Auth and Global state
+│   └── lib/                   # API utilities
 └── README.md
 ```
 
@@ -71,14 +74,13 @@ A premium, state-of-the-art AI-driven interview preparation platform designed sp
 4. Configure environment variables in `.env`:
    ```env
    MONGODB_URL=mongodb://localhost:27017
-   GEMINI_API_KEY=your_openrouter_api_key
-   JWT_SECRET_KEY=your_secret_key
+   GEMINI_API_KEY=your_api_key
    FRONTEND_URL=http://localhost:3000
+   TELEGRAM_CHAT_ID=your_telegram_id (Use @userinfobot to get it)
    ```
-5. Seed the database (Optional but recommended):
+5. Seed the database with sample jobs:
    ```bash
-   python seed_training_data.py
-   python scratch/seed_admin.py
+   python seed_usecases.py
    ```
 6. Run the server:
    ```bash
@@ -94,19 +96,14 @@ A premium, state-of-the-art AI-driven interview preparation platform designed sp
    ```bash
    npm install
    ```
-3. Configure environment variables in `.env.local`:
-   ```env
-   NEXT_PUBLIC_API_URL=http://localhost:8000/api
-   ```
-4. Run the development server:
+3. Run the development server:
    ```bash
    npm run dev
    ```
 
 ## 🔑 Admin Access
-The system includes admin functionality. You can create an admin user using the provided seed script:
-- **Default Email**: `admin@example.com`
-- **Default Password**: `admin123`
+To access the Recruiter Dashboard, log in with an admin account. You can create one using the registration page or a seed script.
+- **Recruiter URL**: `http://localhost:3000/hiring`
 
 ## 📄 License
 MIT License
