@@ -524,3 +524,151 @@ async def generate_resume_from_profile(prompt: str) -> str:
         print(f"Error generating resume from profile: {e}")
         return "ರೆಸ್ಯೂಮ್ ತಯಾರಿಸಲು ಸಾಧ್ಯವಾಗಿಲ್ಲ (Could not generate resume)"
 
+
+async def parse_job_description(jd_text: str) -> dict:
+    """
+    Extracts skills, requirements, and eligibility criteria from a raw JD text.
+    """
+    if not is_configured or not client:
+        return {
+            "title": "Extracted Job",
+            "skills": ["Communication", "Teamwork"],
+            "eligibility": "Basic requirements extracted from text.",
+            "description": jd_text[:200] + "..."
+        }
+
+    prompt = f"""
+    Analyze the following Job Description (JD) and extract key information:
+    
+    JD Text:
+    {jd_text}
+    
+    Extract:
+    1. Job Title
+    2. Top 5 Technical/Soft Skills
+    3. Eligibility Criteria (Experience, Education, etc.)
+    4. A concise 2-sentence summary.
+    
+    Return ONLY a JSON object:
+    {{
+        "title": "Job Title",
+        "skills": ["Skill 1", "Skill 2", ...],
+        "eligibility": "Eligibility criteria summary...",
+        "description": "2-sentence summary..."
+    }}
+    """
+    try:
+        response = await call_ai_with_retry(
+            client.chat.completions.create,
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"}
+        )
+        return json.loads(response.choices[0].message.content.strip())
+    except Exception as e:
+        print(f"Error parsing JD: {e}")
+        return {"title": "Unknown", "skills": [], "eligibility": "", "description": ""}
+
+
+async def generate_adaptive_question_pool(job_role: str, skills: list) -> dict:
+    """
+    Generates a pool of 'easy' and 'difficult' questions in Kannada for a job role.
+    """
+    if not is_configured or not client:
+        return {
+            "easy": [{"q": "ಸರಳ ಪ್ರಶ್ನೆ? (Simple question?)", "category": "General"}],
+            "difficult": [{"q": "ಕಠಿಣ ಪ್ರಶ್ನೆ? (Difficult question?)", "category": "Technical"}]
+        }
+
+    prompt = f"""
+    Generate a technical interview question pool for the role of '{job_role}'.
+    Focus on these skills: {', '.join(skills)}
+    
+    Generate 5 'easy' questions and 5 'difficult' questions.
+    Each question must be in Kannada script, followed by its English translation.
+    
+    Format as JSON:
+    {{
+        "easy": [
+            {{"q": "Kannada Question ||| English Translation", "category": "Core Concept"}},
+            ...
+        ],
+        "difficult": [
+            {{"q": "Kannada Question ||| English Translation", "category": "Advanced Problem"}},
+            ...
+        ]
+    }}
+    """
+    try:
+        response = await call_ai_with_retry(
+            client.chat.completions.create,
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"}
+        )
+        return json.loads(response.choices[0].message.content.strip())
+    except Exception as e:
+        print(f"Error generating question pool: {e}")
+        return {"easy": [], "difficult": []}
+
+
+async def get_embedding(text: str) -> list:
+    """
+    Generates a vector embedding for a given text.
+    Uses OpenAI style embedding API if available, else returns mock.
+    """
+    if not is_configured or not client:
+        return [0.0] * 1536  # Mock embedding
+
+    try:
+        # Note: Using text-embedding-3-small via OpenRouter if available
+        response = await client.embeddings.create(
+            input=[text],
+            model="text-embedding-3-small"
+        )
+        return response.data[0].embedding
+    except Exception as e:
+        print(f"Error getting embedding: {e}")
+        return [0.0] * 1536
+
+
+async def extract_profile_from_voice(transcript: str) -> dict:
+    """
+    Extracts structured profile data (name, skills, experience, location) from a voice transcript.
+    """
+    if not is_configured or not client:
+        return {
+            "skills": ["Communication"],
+            "experience": "Extracted from voice",
+            "location": "Unknown"
+        }
+
+    prompt = f"""
+    Analyze the following transcript from a candidate describing themselves:
+    "{transcript}"
+    
+    Extract the following information:
+    1. Skills (as a list of strings)
+    2. Years of Experience or a summary of work history
+    3. Current Location
+    4. A professional resume summary in Kannada (formatted with English translation after ' ||| ')
+    
+    Return ONLY a JSON object:
+    {{
+        "skills": ["Skill 1", "Skill 2", ...],
+        "experience": "Experience summary...",
+        "location": "City/Region",
+        "resume_text": "Professional summary in Kannada ||| English translation"
+    }}
+    """
+    try:
+        response = await call_ai_with_retry(
+            client.chat.completions.create,
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"}
+        )
+        return json.loads(response.choices[0].message.content.strip())
+    except Exception as e:
+        print(f"Error extracting profile from voice: {e}")
+        return {"skills": [], "experience": "", "location": "", "resume_text": ""}

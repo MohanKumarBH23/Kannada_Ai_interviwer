@@ -30,7 +30,7 @@ export default function AnalyticsPage() {
   const jobId = params.jobId as string;
 
   useEffect(() => {
-    if (!authLoading && (!user || user.role !== 'admin')) {
+    if (!authLoading && (!user || (user.role !== 'admin' && user.role !== 'recruiter'))) {
       router.push('/');
       return;
     }

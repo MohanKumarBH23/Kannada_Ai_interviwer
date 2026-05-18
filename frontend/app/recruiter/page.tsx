@@ -10,9 +10,9 @@ import {
   Filter, ChevronRight, LayoutDashboard, Settings,
   LogOut, Bell, ExternalLink, MoreVertical, Trash2, Edit,
   Mail, Phone, CheckCircle2, AlertCircle, TrendingUp,
-  Target, PieChart, Activity
+  Target, PieChart, Activity, Sparkles, Brain, ListChecks
 } from "lucide-react";
-import { getJobs, createJob, getAdminStats, getAllCandidates, getAnalytics } from "@/lib/api";
+import { getJobs, createJob, getAdminStats, getAllCandidates, getAnalytics, parseJD, generateQuestions } from "@/lib/api";
 
 export default function RecruiterDashboard() {
   const { user, token, loading: authLoading, logout } = useAuth();
@@ -23,6 +23,7 @@ export default function RecruiterDashboard() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
   const [isPostJobModalOpen, setIsPostJobModalOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   
   const [stats, setStats] = useState({
     total_jobs: 0,
@@ -42,6 +43,11 @@ export default function RecruiterDashboard() {
     requirements: "",
     eligibility: ""
   });
+  
+  const [rawJD, setRawJD] = useState("");
+  const [isParsingJD, setIsParsingJD] = useState(false);
+  const [questionPool, setQuestionPool] = useState<{easy: any[], difficult: any[]}>({easy: [], difficult: []});
+  const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -54,7 +60,6 @@ export default function RecruiterDashboard() {
     }
   }, [user, authLoading, token]);
 
-  // Refetch data when tab changes
   useEffect(() => {
     if (token) {
       if (activeTab === 'candidates') fetchCandidates();
@@ -72,7 +77,6 @@ export default function RecruiterDashboard() {
     await Promise.all([
       fetchJobs(),
       fetchStats(),
-      fetchCandidates(),
       fetchAnalytics()
     ]);
     setLoading(false);
@@ -114,20 +118,48 @@ export default function RecruiterDashboard() {
     }
   };
 
+  const handleParseJD = async () => {
+    if (!rawJD) return;
+    setIsParsingJD(true);
+    try {
+      const result = await parseJD(rawJD, token!);
+      setJobFormData({
+        ...jobFormData,
+        title: result.title || jobFormData.title,
+        description: result.description || jobFormData.description,
+        eligibility: result.eligibility || jobFormData.eligibility,
+        requirements: result.skills ? result.skills.join(", ") : jobFormData.requirements
+      });
+      if (result.title) {
+        handleGenerateQuestions(result.title, result.skills || []);
+      }
+    } catch (error) {
+      console.error("JD parsing failed:", error);
+      alert("Failed to parse JD. Please enter details manually.");
+    } finally {
+      setIsParsingJD(false);
+    }
+  };
+
+  const handleGenerateQuestions = async (title: string, skills: string[]) => {
+    setIsGeneratingQuestions(true);
+    try {
+      const pool = await generateQuestions(title, skills, token!);
+      setQuestionPool(pool);
+    } catch (error) {
+      console.error("Question generation failed:", error);
+    } finally {
+      setIsGeneratingQuestions(false);
+    }
+  };
+
   const handlePostJob = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
       await createJob(jobFormData, token!);
       setIsPostJobModalOpen(false);
-      setJobFormData({
-        title: "",
-        location: "",
-        salary: "",
-        description: "",
-        requirements: "",
-        eligibility: ""
-      });
+      resetForm();
       fetchJobs();
       fetchStats();
     } catch (error) {
@@ -136,6 +168,19 @@ export default function RecruiterDashboard() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const resetForm = () => {
+    setJobFormData({
+      title: "",
+      location: "",
+      salary: "",
+      description: "",
+      requirements: "",
+      eligibility: ""
+    });
+    setRawJD("");
+    setQuestionPool({easy: [], difficult: []});
   };
 
   if (authLoading || !user) {
@@ -325,8 +370,21 @@ export default function RecruiterDashboard() {
           )}
 
           {activeTab === "candidates" && (
-            <div className="space-y-6">
-              <h1 className="text-3xl font-black tracking-tight">All Candidates</h1>
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <h1 className="text-3xl font-black tracking-tight">All Candidates</h1>
+                <div className="relative w-full md:w-96">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <input 
+                    type="text" 
+                    placeholder="Search candidates by name or role..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-600/5 focus:border-blue-600 transition-all font-bold text-sm"
+                  />
+                </div>
+              </div>
+
               <div className="bg-white rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
@@ -340,8 +398,13 @@ export default function RecruiterDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {candidates.map(c => (
-                        <tr key={c._id} className="hover:bg-slate-50/30">
+                      {candidates
+                        .filter(c => 
+                          c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          c.job_title?.toLowerCase().includes(searchTerm.toLowerCase())
+                        )
+                        .map(c => (
+                        <tr key={c._id} className="hover:bg-slate-50/30 transition-colors">
                           <td className="px-8 py-6 font-bold">{c.name}</td>
                           <td className="px-8 py-6 text-sm font-bold text-slate-700">{c.job_title}</td>
                           <td className="px-8 py-6">
@@ -389,13 +452,11 @@ export default function RecruiterDashboard() {
                   </div>
                   <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-6">
                      <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center">
-                        <TrendingUp size={28} />
+                        <Zap size={28} />
                      </div>
                      <div>
-                        <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Conversion Rate</p>
-                        <h3 className="text-3xl font-black">
-                           {Math.round((analyticsData.funnel.shortlisted / analyticsData.funnel.applications) * 100) || 0}%
-                        </h3>
+                        <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Time Saved (AI)</p>
+                        <h3 className="text-3xl font-black">{analyticsData.impact.time_saved_hours} hrs</h3>
                      </div>
                   </div>
                </div>
@@ -405,10 +466,11 @@ export default function RecruiterDashboard() {
                   <div className="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm">
                     <h3 className="text-xl font-black mb-8 flex items-center gap-3">
                        <PieChart className="text-blue-600" />
-                       Hiring Funnel (Real Data)
+                       Hiring Funnel (Real Stats)
                     </h3>
                     <div className="space-y-6">
                        {[
+                         { label: 'Total Reach (Estimated)', value: analyticsData.funnel.reach, color: 'slate' },
                          { label: 'Applications', value: analyticsData.funnel.applications, color: 'blue' },
                          { label: 'Interviews Started', value: analyticsData.funnel.interviews_started, color: 'indigo' },
                          { label: 'Interviews Completed', value: analyticsData.funnel.interviews_completed, color: 'emerald' },
@@ -422,7 +484,7 @@ export default function RecruiterDashboard() {
                             <div className="h-4 bg-slate-50 rounded-full overflow-hidden">
                                <div 
                                  className={`h-full bg-${item.color}-500 transition-all duration-1000`} 
-                                 style={{ width: `${(item.value / analyticsData.funnel.applications) * 100 || 0}%` }}
+                                 style={{ width: `${(item.value / (analyticsData.funnel.reach || 1)) * 100 || 0}%` }}
                                ></div>
                             </div>
                          </div>
@@ -458,7 +520,7 @@ export default function RecruiterDashboard() {
                     </div>
                     <div className="mt-8 pt-8 border-t border-slate-50 text-center">
                        <p className="text-sm font-bold text-slate-500 italic">
-                          Total of <span className="text-blue-600">{analyticsData.performance.total_scored}</span> candidates scored so far.
+                          Analysis based on <span className="text-blue-600">{analyticsData.performance.total_scored}</span> real interview sessions.
                        </p>
                     </div>
                   </div>
@@ -470,98 +532,156 @@ export default function RecruiterDashboard() {
 
       {/* Post Job Modal */}
       {isPostJobModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 sm:p-12">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 sm:p-12 overflow-y-auto">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsPostJobModalOpen(false)}></div>
-          <div className="relative bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+          <div className="relative bg-white w-full max-w-4xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 my-auto">
             <div className="p-8 border-b border-slate-100 flex items-center justify-between">
               <div>
-                <h2 className="text-2xl font-black tracking-tight">Post New Job Details</h2>
-                <p className="text-sm text-slate-500 font-medium">Fill in the information below to start a new recruitment campaign.</p>
+                <h2 className="text-2xl font-black tracking-tight">Post New Job Campaign</h2>
+                <p className="text-sm text-slate-500 font-medium">Use AI to parse your JD and generate adaptive Kannada questions.</p>
               </div>
               <button onClick={() => setIsPostJobModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-900 rounded-xl transition-all">
                 <Plus size={24} className="rotate-45" />
               </button>
             </div>
 
-            <form onSubmit={handlePostJob} className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Job Title</label>
-                  <input 
-                    required
-                    type="text" 
-                    placeholder="e.g. Software Engineer"
-                    value={jobFormData.title}
-                    onChange={(e) => setJobFormData({...jobFormData, title: e.target.value})}
-                    className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-600/5 focus:border-blue-600 transition-all font-bold placeholder:font-medium"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Location</label>
-                  <input 
-                    required
-                    type="text" 
-                    placeholder="e.g. Bangalore, Remote"
-                    value={jobFormData.location}
-                    onChange={(e) => setJobFormData({...jobFormData, location: e.target.value})}
-                    className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-600/5 focus:border-blue-600 transition-all font-bold placeholder:font-medium"
-                  />
-                </div>
-              </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2">
+              {/* Left Side: JD Manager */}
+              <div className="p-8 border-r border-slate-100 bg-slate-50/50">
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                      <FileText size={14} className="text-blue-600" />
+                      JD Manager (Paste Job Description)
+                    </label>
+                    <textarea 
+                      rows={10}
+                      placeholder="Paste the full job description here..."
+                      value={rawJD}
+                      onChange={(e) => setRawJD(e.target.value)}
+                      className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-600/5 focus:border-blue-600 transition-all font-medium text-sm resize-none"
+                    />
+                  </div>
+                  <button 
+                    onClick={handleParseJD}
+                    disabled={isParsingJD || !rawJD}
+                    className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-blue-600/20 hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isParsingJD ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    ) : (
+                      <>
+                        <Sparkles size={18} />
+                        Extract Info & Generate Questions
+                      </>
+                    )}
+                  </button>
 
-              <div className="space-y-2">
-                <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Salary Range</label>
-                <input 
-                  required
-                  type="text" 
-                  placeholder="e.g. $80,000 - $120,000"
-                  value={jobFormData.salary}
-                  onChange={(e) => setJobFormData({...jobFormData, salary: e.target.value})}
-                  className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-600/5 focus:border-blue-600 transition-all font-bold placeholder:font-medium"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Job Description</label>
-                <textarea 
-                  required
-                  rows={4}
-                  placeholder="Describe the role and responsibilities..."
-                  value={jobFormData.description}
-                  onChange={(e) => setJobFormData({...jobFormData, description: e.target.value})}
-                  className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-600/5 focus:border-blue-600 transition-all font-bold placeholder:font-medium resize-none"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Eligibility Criteria (AI Filters)</label>
-                <textarea 
-                  required
-                  rows={3}
-                  placeholder="List requirements for AI to filter candidates..."
-                  value={jobFormData.eligibility}
-                  onChange={(e) => setJobFormData({...jobFormData, eligibility: e.target.value})}
-                  className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-600/5 focus:border-blue-600 transition-all font-bold placeholder:font-medium resize-none"
-                />
-              </div>
-
-              <div className="pt-4">
-                <button 
-                  disabled={isSubmitting}
-                  type="submit"
-                  className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-lg shadow-xl shadow-blue-600/20 hover:bg-blue-700 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 flex items-center justify-center gap-3"
-                >
-                  {isSubmitting ? (
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-                  ) : (
-                    <>
-                      <Zap size={20} />
-                      Publish Job Posting
-                    </>
+                  {/* Adaptive Questions Preview */}
+                  {questionPool.easy.length > 0 && (
+                    <div className="space-y-4 pt-4 border-t border-slate-200 animate-in fade-in slide-in-from-bottom-2">
+                       <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                          <Brain size={14} className="text-purple-600" />
+                          Adaptive Question Pool (Kannada)
+                       </h4>
+                       <div className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                          {questionPool.easy.map((q, i) => (
+                             <div key={i} className="p-3 bg-white border border-emerald-100 rounded-xl">
+                                <span className="text-[10px] font-black text-emerald-600 uppercase mb-1 block">Level: Easy</span>
+                                <p className="text-xs font-bold text-slate-700 leading-relaxed">{q.q}</p>
+                             </div>
+                          ))}
+                          {questionPool.difficult.map((q, i) => (
+                             <div key={i} className="p-3 bg-white border border-rose-100 rounded-xl">
+                                <span className="text-[10px] font-black text-rose-600 uppercase mb-1 block">Level: Difficult</span>
+                                <p className="text-xs font-bold text-slate-700 leading-relaxed">{q.q}</p>
+                             </div>
+                          ))}
+                       </div>
+                    </div>
                   )}
-                </button>
+                </div>
               </div>
-            </form>
+
+              {/* Right Side: Form */}
+              <form onSubmit={handlePostJob} className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Job Title</label>
+                    <input 
+                      required
+                      type="text" 
+                      placeholder="e.g. Delivery Executive"
+                      value={jobFormData.title}
+                      onChange={(e) => setJobFormData({...jobFormData, title: e.target.value})}
+                      className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 transition-all font-bold text-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Location</label>
+                    <input 
+                      required
+                      type="text" 
+                      placeholder="e.g. Bangalore"
+                      value={jobFormData.location}
+                      onChange={(e) => setJobFormData({...jobFormData, location: e.target.value})}
+                      className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 transition-all font-bold text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Salary</label>
+                  <input 
+                    required
+                    type="text" 
+                    placeholder="e.g. ₹25,000 - ₹35,000"
+                    value={jobFormData.salary}
+                    onChange={(e) => setJobFormData({...jobFormData, salary: e.target.value})}
+                    className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 transition-all font-bold text-sm"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Job Summary (AI Generated)</label>
+                  <textarea 
+                    required
+                    rows={2}
+                    value={jobFormData.description}
+                    onChange={(e) => setJobFormData({...jobFormData, description: e.target.value})}
+                    className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 transition-all font-medium text-xs resize-none"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Eligibility Parameters</label>
+                  <textarea 
+                    required
+                    rows={2}
+                    value={jobFormData.eligibility}
+                    onChange={(e) => setJobFormData({...jobFormData, eligibility: e.target.value})}
+                    className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 transition-all font-medium text-xs resize-none"
+                  />
+                </div>
+
+                <div className="pt-4">
+                  <button 
+                    disabled={isSubmitting}
+                    type="submit"
+                    className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-lg shadow-xl shadow-slate-900/10 hover:bg-black transition-all disabled:opacity-50 flex items-center justify-center gap-3"
+                  >
+                    {isSubmitting ? (
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={20} />
+                        Publish Campaign
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

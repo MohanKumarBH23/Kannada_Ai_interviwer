@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getInterviewSession, getInterviewReport } from "@/lib/api";
 import { Trophy, Home, Loader2, Star, Download, TrendingUp, TrendingDown, Minus, Shield, Award, AlertTriangle, CheckCircle, CheckCircle2, BarChart3, FileText, Sparkles } from "lucide-react";
@@ -55,7 +55,7 @@ export default function ResultsPage({ params }: { params: { sessionId: string } 
     fetchSession();
   }, [params.sessionId, token]);
 
-  const handleGenerateReport = async () => {
+  const handleGenerateReport = useCallback(async () => {
     if (!token) return;
     setReportLoading(true);
     setReportError("");
@@ -68,7 +68,13 @@ export default function ResultsPage({ params }: { params: { sessionId: string } 
     } finally {
       setReportLoading(false);
     }
-  };
+  }, [params.sessionId, token]);
+
+  useEffect(() => {
+    if (session?.is_practice && !report && !reportLoading && token) {
+      handleGenerateReport();
+    }
+  }, [session, report, reportLoading, token, handleGenerateReport]);
 
   const handlePrint = () => {
     window.print();
@@ -85,8 +91,13 @@ export default function ResultsPage({ params }: { params: { sessionId: string } 
     );
   }
 
-  // Check if results are hidden (Hide for guests/non-admins, or if it's a candidate interview)
-  const isResultsHidden = (!user || user.role !== "admin") || (session?.candidate_id && user?.role !== "admin");
+  // Check if results are hidden
+  // Logic: 
+  // 1. If it's a practice interview, allow the user to see it.
+  // 2. If it's a hiring interview (linked to a candidate_id), only admins can see it.
+  // 3. Otherwise, only admins or the owner can see it.
+  const isPractice = session?.is_practice === true;
+  const isResultsHidden = !isPractice && ((!user || user.role !== "admin") || (session?.candidate_id && user?.role !== "admin"));
 
   if (isResultsHidden) {
     return (
@@ -191,7 +202,7 @@ export default function ResultsPage({ params }: { params: { sessionId: string } 
                   <h1 className="text-4xl sm:text-5xl font-black text-slate-900 leading-tight tracking-tight mb-2">
                     ಸಂದರ್ಶನ ಪೂರ್ಣಗೊಂಡಿದೆ!
                   </h1>
-                  <p className="text-slate-400 font-medium text-lg mb-6">Great effort, {user.name}!</p>
+                  <p className="text-slate-400 font-medium text-lg mb-6">Great effort, {user?.name || "Candidate"}!</p>
                   <div className="flex flex-wrap gap-3 justify-center sm:justify-start">
                     <button
                       onClick={() => router.push("/")}
@@ -329,7 +340,7 @@ export default function ResultsPage({ params }: { params: { sessionId: string } 
                 <div className="bg-white rounded-[2rem] border border-teal-100 shadow-sm p-8">
                   <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-6">
                     <Award className="w-4 h-4 text-teal-500" />
-                    Strengths (ಬಲ ಅಂಶಗಳು)
+                    Positives & Strengths (ಬಲ ಅಂಶಗಳು)
                   </h3>
                   <div className="grid grid-cols-1 gap-4">
                     <div className="space-y-2">
@@ -362,7 +373,7 @@ export default function ResultsPage({ params }: { params: { sessionId: string } 
                 <div className="bg-white rounded-[2rem] border border-amber-100 shadow-sm p-8">
                   <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-6">
                     <AlertTriangle className="w-4 h-4 text-amber-500" />
-                    Improvements (ಸುಧಾರಣೆ ಅಂಶಗಳು)
+                    Negatives & Improvements (ಸುಧಾರಣೆ ಅಂಶಗಳು)
                   </h3>
                   <div className="grid grid-cols-1 gap-4">
                     <div className="space-y-2">

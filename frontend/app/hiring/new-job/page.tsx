@@ -28,7 +28,7 @@ export default function NewJobPage() {
   const [isAiLoading, setIsAiLoading] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && (!user || user.role !== 'admin')) {
+    if (!authLoading && (!user || (user.role !== 'admin' && user.role !== 'recruiter'))) {
       router.push('/');
     }
   }, [user, authLoading]);
@@ -94,7 +94,7 @@ export default function NewJobPage() {
     }
   };
 
-  if (authLoading || !user || user.role !== 'admin') return null;
+  if (authLoading || !user || (user.role !== 'admin' && user.role !== 'recruiter')) return null;
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-12">

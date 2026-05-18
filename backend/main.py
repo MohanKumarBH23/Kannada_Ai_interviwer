@@ -215,10 +215,20 @@ async def get_admin_stats(user: dict = Depends(read_users_me)):
     
     total_jobs = await jobs_collection.count_documents({})
     total_candidates = await candidates_collection.count_documents({})
-    total_interviews = await interviews_collection.count_documents({})
+    # Count only real candidate interviews (not practice) that are linked to existing candidates
+    # We can use an aggregation to be precise, or just filter is_practice
+    # For now, let's filter is_practice and ensure they are valid sessions
+    total_interviews = await interviews_collection.count_documents({
+        "is_practice": {"$ne": True},
+        "candidate_id": {"$exists": True, "$ne": ""}
+    })
     
-    # Calculate AI Screened percentage
-    ai_screened = await candidates_collection.count_documents({"evaluation_result": {"$exists": True, "$ne": None}})
+    # Calculate AI Screened percentage based on completed candidate interviews
+    ai_screened = await interviews_collection.count_documents({
+        "is_practice": {"$ne": True},
+        "status": "completed",
+        "candidate_id": {"$exists": True, "$ne": ""}
+    })
     ai_screened_pct = (ai_screened / total_candidates * 100) if total_candidates > 0 else 0
     
     return {
@@ -260,27 +270,33 @@ async def get_admin_analytics(user: dict = Depends(read_users_me)):
     if user.get("role") not in ["admin", "recruiter"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     
-    # 1. Conversion Metrics
-    total_applications = await candidates_collection.count_documents({})
+    # 1. Get all valid candidate IDs for reference
+    valid_candidates_cursor = candidates_collection.find({}, {"_id": 1})
+    valid_candidate_ids = {str(c["_id"]) async for c in valid_candidates_cursor}
     
+    total_applications = len(valid_candidate_ids)
+    
+    # 2. Filter interviews to ONLY those linked to valid candidates and NOT practice
     interviews_cursor = interviews_collection.find({"is_practice": {"$ne": True}})
-    interviews = await interviews_cursor.to_list(length=5000)
+    all_interviews = await interviews_cursor.to_list(length=5000)
     
-    total_interviews = len(interviews)
-    completed_interviews = sum(1 for i in interviews if i.get("status") == "completed")
+    # Strictly filter for interviews that belong to real applicants
+    real_interviews = [i for i in all_interviews if str(i.get("candidate_id")) in valid_candidate_ids]
+    
+    total_interviews_started = len(real_interviews)
+    completed_interviews = [i for i in real_interviews if i.get("status") == "completed"]
+    total_interviews_completed = len(completed_interviews)
     
     selected_candidates = await candidates_collection.count_documents({"selection_status": "Selected"})
     
-    # 2. Performance Metrics
-    scores = [i.get("score") for i in interviews if i.get("score") is not None]
+    # 3. Performance Metrics (Real interviews only)
+    scores = [i.get("score") for i in completed_interviews if i.get("score") is not None]
     avg_score = sum(scores) / len(scores) if scores else 0
     highest_score = max(scores) if scores else 0
     lowest_score = min(scores) if scores else 0
     
-    # 3. Score Distribution
-    distribution = {
-        "0-20": 0, "21-40": 0, "41-60": 0, "61-80": 0, "81-100": 0
-    }
+    # 4. Score Distribution
+    distribution = {"0-20": 0, "21-40": 0, "41-60": 0, "61-80": 0, "81-100": 0}
     for s in scores:
         if s <= 20: distribution["0-20"] += 1
         elif s <= 40: distribution["21-40"] += 1
@@ -288,12 +304,17 @@ async def get_admin_analytics(user: dict = Depends(read_users_me)):
         elif s <= 80: distribution["61-80"] += 1
         else: distribution["81-100"] += 1
 
+    # 5. Impact Metrics
+    time_saved_hours = total_interviews_completed * 0.5
+    simulated_reach = total_applications * 3 # More realistic multiplier
+
     return {
         "funnel": {
             "applications": total_applications,
-            "interviews_started": total_interviews,
-            "interviews_completed": completed_interviews,
-            "shortlisted": selected_candidates
+            "interviews_started": total_interviews_started,
+            "interviews_completed": total_interviews_completed,
+            "shortlisted": selected_candidates,
+            "reach": simulated_reach
         },
         "performance": {
             "avg_score": round(avg_score, 1),
@@ -301,8 +322,40 @@ async def get_admin_analytics(user: dict = Depends(read_users_me)):
             "lowest_score": lowest_score,
             "total_scored": len(scores)
         },
-        "distribution": distribution
+        "distribution": distribution,
+        "impact": {
+            "time_saved_hours": round(time_saved_hours, 1),
+            "efficiency_multiplier": 1.2
+        }
     }
+
+
+@app.post("/api/admin/parse-jd")
+async def api_parse_jd(data: dict, user: dict = Depends(read_users_me)):
+    if user.get("role") not in ["admin", "recruiter"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    jd_text = data.get("jd_text")
+    if not jd_text:
+        raise HTTPException(status_code=400, detail="JD text is required")
+    
+    result = await ai_service.parse_job_description(jd_text)
+    return result
+
+
+@app.post("/api/admin/generate-questions")
+async def api_generate_questions(data: dict, user: dict = Depends(read_users_me)):
+    if user.get("role") not in ["admin", "recruiter"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    job_role = data.get("job_role")
+    skills = data.get("skills", [])
+    
+    if not job_role:
+        raise HTTPException(status_code=400, detail="Job role is required")
+    
+    pool = await ai_service.generate_adaptive_question_pool(job_role, skills)
+    return pool
 
 
 async def get_current_user_optional(token: str = Depends(auth.oauth2_scheme_optional)):
@@ -325,10 +378,10 @@ async def get_current_user_optional(token: str = Depends(auth.oauth2_scheme_opti
 
 
 def require_admin(user: dict = Depends(read_users_me)):
-    if user.get("role") != "admin":
+    if user.get("role") not in ["admin", "recruiter"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin privileges required",
+            detail="Admin or recruiter privileges required",
         )
     return user
 
@@ -702,11 +755,13 @@ async def get_interview_report(session_id: str, user: dict = Depends(read_users_
             detail="You do not have permission to access this session",
         )
 
-    # Hiring interview restriction: only admins see reports
-    if session.get("job_id") and user.get("role") != "admin":
+    # Hiring interview restriction: only admins see reports for REAL job applications
+    # Practice interviews are allowed for the candidate themselves
+    is_practice = session.get("is_practice") == True
+    if session.get("job_id") and user.get("role") != "admin" and not is_practice:
          raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Candidate results are restricted to the hiring team",
+            detail="Candidate results for real applications are restricted to the hiring team",
         )
 
     if session.get("status") != "completed":
@@ -871,7 +926,6 @@ async def upload_candidates_csv(job_id: str, file: UploadFile = File(...), admin
             "location": row.get("location"),
             "other_details": row.get("other_details", "")
         }
-        
         # Evaluate eligibility using AI
         eval_result = await ai_service.evaluate_candidate_eligibility(eligibility_criteria, candidate_data)
         
@@ -1024,7 +1078,8 @@ async def bulk_recruitment_pipeline(
                         await messaging_service.send_interview_link(
                             candidate_data["name"], 
                             candidate_data["phone"], 
-                            interview_link
+                            interview_link,
+                            method='telegram'
                         )
                         notified = True
                     except Exception as msg_err:
@@ -1086,3 +1141,144 @@ async def bulk_recruitment_pipeline(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Pipeline error: {str(e)}")
+
+
+@app.post("/api/auth/voice-resume")
+async def build_voice_resume(
+    audio: UploadFile = File(...),
+    user: dict = Depends(read_users_me)
+):
+    """
+    Transcribes voice and builds a resume/profile from it.
+    """
+    content = await audio.read()
+    mime_type = audio.content_type
+    
+    # 1. Transcribe the audio
+    transcript = await ai_service.transcribe_audio(content, mime_type)
+    
+    if "[Audio not clear]" in transcript:
+         raise HTTPException(status_code=400, detail="Audio was not clear enough to process.")
+         
+    # 2. Extract profile details
+    extracted_data = await ai_service.extract_profile_from_voice(transcript)
+    
+    # 3. Update user profile
+    await users_collection.update_one(
+        {"_id": ObjectId(user["id"])},
+        {"$set": extracted_data}
+    )
+    
+    return {
+        "message": "Profile updated successfully from voice",
+        "transcript": transcript,
+        **extracted_data
+    }
+
+
+@app.post("/api/candidate/apply")
+async def apply_job(
+    job_id: str = Form(...),
+    resume: UploadFile = File(None),
+    user: dict = Depends(read_users_me)
+):
+    try:
+        resume_text = ""
+        if resume and resume.filename and resume.filename.lower().endswith(".pdf"):
+            import io
+            content = await resume.read()
+            if content:
+                doc = fitz.open(stream=io.BytesIO(content), filetype="pdf")
+                for page in doc:
+                    resume_text += page.get_text()
+                doc.close()
+                resume_text = resume_text.strip()
+                
+        # If no new resume provided, fallback to profile
+        if not resume_text and user.get("resume_text"):
+            resume_text = user.get("resume_text")
+
+        new_candidate = {
+            "name": user.get("name", "Unknown Applicant"),
+            "email": user.get("email"),
+            "phone": user.get("phone", ""),
+            "experience": user.get("experience"),
+            "location": user.get("location"),
+            "other_details": f"Resume Text: {resume_text[:500]}..." if resume_text else "",
+            "job_id": job_id,
+            "status": "Pending",
+            "selection_status": "Pending",
+            "created_at": datetime.now(timezone.utc),
+            "user_id": str(user["_id"])
+        }
+        cand_result = await candidates_collection.insert_one(new_candidate)
+        return {"success": True, "candidate_id": str(cand_result.inserted_id)}
+    except Exception as e:
+        print(f"ERROR in apply_job: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/candidate/{candidate_id}/evaluate")
+async def evaluate_candidate(
+    candidate_id: str,
+    admin_user: dict = Depends(require_admin)
+):
+    try:
+        candidate = await candidates_collection.find_one({"_id": ObjectId(candidate_id)})
+        if not candidate:
+            raise HTTPException(status_code=404, detail="Candidate not found")
+        
+        job = await jobs_collection.find_one({"_id": ObjectId(candidate["job_id"])})
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+            
+        eligibility = job.get("eligibility", "")
+        
+        candidate_data = {
+            "name": candidate.get("name"),
+            "phone": candidate.get("phone"),
+            "email": candidate.get("email"),
+            "experience": candidate.get("experience"),
+            "location": candidate.get("location"),
+            "other_details": candidate.get("other_details", "")
+        }
+        
+        eval_result = await ai_service.evaluate_candidate_eligibility(eligibility, candidate_data)
+        is_eligible = eval_result.get("is_eligible", False)
+        selection_status = "Selected" if is_eligible else "Rejected"
+        reason = eval_result.get("reason", "No reason provided")
+        
+        interview_link = None
+        if is_eligible:
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+            interview_link = f"{frontend_url}/interview/start?candidate_id={candidate_id}&job_id={str(job['_id'])}"
+            
+            if candidate.get("phone"):
+                try:
+                    await messaging_service.send_interview_link(
+                        candidate.get("name"), 
+                        candidate.get("phone"), 
+                        interview_link,
+                        method='telegram'
+                    )
+                except Exception as msg_err:
+                    print(f"WARNING: Failed to notify {candidate.get('name')}: {msg_err}")
+                    
+        await candidates_collection.update_one(
+            {"_id": ObjectId(candidate_id)},
+            {"$set": {
+                "selection_status": selection_status,
+                "eligibility_reason": reason,
+                "interview_link": interview_link
+            }}
+        )
+        
+        return {
+            "success": True, 
+            "selection_status": selection_status, 
+            "reason": reason,
+            "interview_link": interview_link
+        }
+    except Exception as e:
+        print(f"ERROR in evaluate_candidate: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+

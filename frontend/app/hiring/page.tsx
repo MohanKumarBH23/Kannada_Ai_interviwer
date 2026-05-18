@@ -25,7 +25,7 @@ export default function HiringDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    if (!authLoading && (!user || user.role !== 'admin')) {
+    if (!authLoading && (!user || (user.role !== 'admin' && user.role !== 'recruiter'))) {
       router.push('/');
       return;
     }
@@ -63,7 +63,7 @@ export default function HiringDashboard() {
     job.location.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  if (authLoading || !user || user.role !== 'admin') {
+  if (authLoading || !user || (user.role !== 'admin' && user.role !== 'recruiter')) {
     return <div className="min-h-screen flex items-center justify-center">Access Denied</div>;
   }
 

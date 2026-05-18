@@ -7,7 +7,7 @@ TELEGRAM_TOKEN = "8695051283:AAEbeHwjAZsZDa3J3NHTuwfEpPkbTpMD_B8"
 
 async def send_interview_link(name: str, phone: str, link: str, method: str = 'telegram'):
     """
-    Sends an interview link to a candidate via SMS, WhatsApp, or Telegram.
+    Sends an interview link to a candidate via SMS or Telegram.
     """
     clean_phone = "".join(filter(str.isdigit, phone))
     safe_name = html.escape(name)
@@ -48,11 +48,52 @@ async def send_interview_link(name: str, phone: str, link: str, method: str = 't
             except Exception as e:
                 print(f"ERROR: [TELEGRAM] API call failed: {e}")
 
-    elif method == 'whatsapp':
-        print(f"DEBUG: [WHATSAPP] Sending to {clean_phone}: {message}")
+    elif method == 'sms':
+        auth_key = os.getenv("MSG91_AUTH_KEY")
+        template_id = os.getenv("MSG91_TEMPLATE_ID")
+        sender_id = os.getenv("MSG91_SENDER_ID", "KNDAAI")
         
+        if not auth_key or not template_id:
+            print("ERROR: [MSG91] Credentials (MSG91_AUTH_KEY/MSG91_TEMPLATE_ID) missing in .env")
+            print(f"DEBUG: [SMS Mock] Sending to {clean_phone}: {message}")
+            return False
+
+        url = "https://control.msg91.com/api/v5/flow/"
+        headers = {
+            "authkey": auth_key,
+            "accept": "application/json",
+            "content-type": "application/json"
+        }
+        
+        # Format phone with 91 if needed
+        formatted_phone = clean_phone if clean_phone.startswith("91") else f"91{clean_phone}"
+        
+        payload = {
+            "template_id": template_id,
+            "sender": sender_id,
+            "short_url": "0",
+            "mobiles": formatted_phone,
+            "name": name,
+            "link": link
+        }
+        
+        print(f"DEBUG: [MSG91] Sending SMS to {formatted_phone} using template {template_id}...")
+        
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(url, headers=headers, json=payload)
+                if response.status_code == 200:
+                    print(f"SUCCESS: [MSG91] SMS sent to {formatted_phone}")
+                    return True
+                else:
+                    print(f"ERROR: [MSG91] Failed to send: {response.text}")
+                    return False
+            except Exception as e:
+                print(f"ERROR: [MSG91] API call failed: {e}")
+                return False
+    
     else:
-        print(f"DEBUG: [SMS] Sending to {clean_phone}: {message}")
+        print(f"DEBUG: [UNKNOWN METHOD] Mock sending to {clean_phone}: {message}")
     
     await asyncio.sleep(0.1)
     return True

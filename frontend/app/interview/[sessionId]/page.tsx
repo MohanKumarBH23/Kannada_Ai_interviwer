@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getInterviewSession, submitAnswer, submitAudioAnswer, stopInterview, deleteInterview } from "@/lib/api";
-import { Send, Bot, User, Loader2, Mic, Square, Trash2, LogOut, CheckCircle2, AlertCircle, ArrowLeft, Sparkles } from "lucide-react";
+import { Send, Bot, User, Loader2, Mic, Square, Trash2, LogOut, CheckCircle2, AlertCircle, ArrowLeft, Sparkles, CameraOff } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import ProctoringSystem from "@/components/ProctoringSystem";
 
 export default function InterviewPage({ params }: { params: { sessionId: string } }) {
   const router = useRouter();
@@ -18,6 +19,7 @@ export default function InterviewPage({ params }: { params: { sessionId: string 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const [proctoringError, setProctoringError] = useState(false);
 
   // Removed mandatory login check to allow guest candidate access
 
@@ -85,7 +87,7 @@ export default function InterviewPage({ params }: { params: { sessionId: string 
   const fetchSession = async () => {
     // We allow fetching even without a token for guest candidate access
     try {
-      const data = await getInterviewSession(params.sessionId, token);
+      const data = await getInterviewSession(params.sessionId, token || undefined);
       if (data.status === "completed") {
         router.push(`/results/${params.sessionId}`);
       } else {
@@ -100,16 +102,19 @@ export default function InterviewPage({ params }: { params: { sessionId: string 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!answer.trim() || submitting) return;
+    if (!answer.trim() || submitting || !session) return;
 
     setSubmitting(true);
     const currentAnswer = answer;
     setAnswer("");
     
-    setSession((prev: any) => ({
-      ...prev,
-      messages: [...prev.messages, { role: "user", content: currentAnswer }]
-    }));
+    setSession((prev: any) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        messages: [...(prev.messages || []), { role: "user", content: currentAnswer }]
+      };
+    });
 
     try {
       const response = await submitAnswer(params.sessionId, currentAnswer, token || undefined);
@@ -133,7 +138,7 @@ export default function InterviewPage({ params }: { params: { sessionId: string 
     setConfirmType(null);
     setLoading(true);
     try {
-      await stopInterview(params.sessionId, token);
+      await stopInterview(params.sessionId, token || "");
       router.push(`/results/${params.sessionId}`);
     } catch (err) {
       console.error("Stop interview error:", err);
@@ -150,7 +155,7 @@ export default function InterviewPage({ params }: { params: { sessionId: string 
     setConfirmType(null);
     setLoading(true);
     try {
-      await deleteInterview(params.sessionId, token);
+      await deleteInterview(params.sessionId, token || "");
       router.push("/");
     } catch (err) {
       console.error("Delete interview error:", err);
@@ -174,6 +179,56 @@ export default function InterviewPage({ params }: { params: { sessionId: string 
 
   return (
     <div className="min-h-screen bg-slate-50 relative overflow-x-hidden flex flex-col bg-[radial-gradient(circle_at_top_right,rgba(45,212,191,0.08),transparent),radial-gradient(circle_at_bottom_left,rgba(255,255,255,1),transparent)]">
+      {/* Proctoring System */}
+      <ProctoringSystem 
+        sessionId={params.sessionId} 
+        isPractice={session?.is_practice} 
+        onError={(err) => setProctoringError(err)}
+      />
+
+      {/* Compulsory Camera/Mic Overlay for Non-Practice Sessions */}
+      {proctoringError && !session?.is_practice && (
+        <div className="fixed inset-0 z-[200] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-6 text-center">
+          <div className="max-w-md w-full bg-white rounded-[2.5rem] p-10 shadow-2xl space-y-8 animate-in zoom-in-95 duration-300">
+            <div className="w-20 h-20 bg-rose-50 rounded-2xl flex items-center justify-center mx-auto text-rose-500">
+              <CameraOff size={40} />
+            </div>
+            <div className="space-y-4">
+              <h2 className="text-2xl font-black text-slate-900 leading-tight">
+                Camera & Microphone Required
+              </h2>
+              <p className="text-slate-500 font-medium leading-relaxed">
+                ಸಂದರ್ಶನಕ್ಕೆ ಹಾಜರಾಗಲು ಕ್ಯಾಮೆರಾ ಮತ್ತು ಮೈಕ್ರೊಫೋನ್ ಕಡ್ಡಾಯವಾಗಿದೆ.<br/>
+                (Camera and microphone are compulsory to attend this interview.)
+              </p>
+            </div>
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 text-left space-y-3">
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">How to fix:</p>
+              <ul className="text-xs font-bold text-slate-600 space-y-2">
+                <li className="flex gap-2">
+                  <div className="w-4 h-4 rounded-full bg-teal-100 text-teal-600 flex items-center justify-center text-[10px]">1</div>
+                  Click the lock icon in your browser address bar
+                </li>
+                <li className="flex gap-2">
+                  <div className="w-4 h-4 rounded-full bg-teal-100 text-teal-600 flex items-center justify-center text-[10px]">2</div>
+                  Change Camera & Microphone to "Allow"
+                </li>
+                <li className="flex gap-2">
+                  <div className="w-4 h-4 rounded-full bg-teal-100 text-teal-600 flex items-center justify-center text-[10px]">3</div>
+                  Refresh the page to start
+                </li>
+              </ul>
+            </div>
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full py-4 bg-teal-600 text-white rounded-2xl font-black shadow-xl shadow-teal-600/20 hover:bg-teal-700 transition-all"
+            >
+              Check Permissions Again
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Decorative background elements */}
       <div className="fixed top-[-10%] left-[-5%] w-[600px] h-[600px] bg-teal-400/5 rounded-full blur-[120px] mix-blend-multiply pointer-events-none z-0"></div>
       <div className="fixed bottom-[-10%] right-[-5%] w-[600px] h-[600px] bg-indigo-400/5 rounded-full blur-[120px] mix-blend-multiply pointer-events-none z-0"></div>

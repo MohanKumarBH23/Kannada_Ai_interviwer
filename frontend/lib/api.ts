@@ -96,9 +96,9 @@ export async function getInterviewReport(sessionId: string, token: string) {
   return response.json();
 }
 
-export async function getJobs(token: string) {
+export async function getJobs(token?: string) {
   const response = await fetch(`${API_BASE_URL}/jobs`, {
-    headers: { 'Authorization': `Bearer ${token}` },
+    headers: token ? { 'Authorization': `Bearer ${token}` } : {},
   });
   if (!response.ok) throw new Error('Failed to fetch jobs');
   return response.json();
@@ -240,5 +240,69 @@ export async function getAnalytics(token: string) {
     },
   });
   if (!response.ok) throw new Error('Failed to fetch analytics');
+  return response.json();
+}
+
+export async function parseJD(jdText: string, token: string) {
+  const response = await fetch(`${API_BASE_URL}/admin/parse-jd`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({ jd_text: jdText }),
+  });
+  if (!response.ok) throw new Error('Failed to parse JD');
+  return response.json();
+}
+
+export async function generateQuestions(jobRole: string, skills: string[], token: string) {
+  const response = await fetch(`${API_BASE_URL}/admin/generate-questions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({ job_role: jobRole, skills }),
+  });
+  if (!response.ok) throw new Error('Failed to generate questions');
+  return response.json();
+}
+
+export async function buildVoiceResume(audioBlob: Blob, token: string) {
+  const formData = new FormData();
+  formData.append('audio', audioBlob, 'resume_voice.webm');
+
+  const response = await fetch(`${API_BASE_URL}/auth/voice-resume`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` },
+    body: formData,
+  });
+  if (!response.ok) throw new Error('Failed to build voice resume');
+  return response.json();
+}
+
+export async function applyJob(jobId: string, resumeFile: File | null = null, token: string) {
+  const formData = new FormData();
+  formData.append('job_id', jobId);
+  if (resumeFile) {
+    formData.append('resume', resumeFile);
+  }
+
+  const response = await fetch(`${API_BASE_URL}/candidate/apply`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` },
+    body: formData,
+  });
+  if (!response.ok) throw new Error('Failed to apply for job');
+  return response.json();
+}
+
+export async function evaluateCandidate(candidateId: string, token: string) {
+  const response = await fetch(`${API_BASE_URL}/candidate/${candidateId}/evaluate`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  if (!response.ok) throw new Error('Failed to evaluate candidate');
   return response.json();
 }

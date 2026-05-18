@@ -9,8 +9,9 @@ A premium, state-of-the-art AI-driven interview and recruitment platform designe
 - **Realistic Performance Analytics**: Deep-dive insights into candidate performance, including average score distribution, highest/lowest scores, and hiring funnel conversion rates.
 - **My Job Posts**: Dedicated management suite for all job campaigns with quick-action stats and applicant tracking.
 - **Unified Candidate Management**: Centralized view of all applicants across all jobs, tracking their application status, AI interview scores, and contact details.
+- **Recruiter Evaluation Workflow**: Instantly review **Pending** organic applications from the dashboard. Trigger an AI eligibility check against the job criteria with a single click.
 - **Bulk AI Screening**: Upload candidate CSV files for automatic eligibility evaluation and interview link generation.
-- **Telegram Automation**: Instant interview link delivery for seamless candidate communication.
+- **Telegram Automation**: Automated interview invitation delivery to selected candidates (both bulk-uploaded and dashboard-applied candidates) via Telegram.
 
 ### For Candidates (Applicants)
 - **AI Profile Management**: Build a professional profile including experience, skills, and personal details.

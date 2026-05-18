@@ -4,10 +4,10 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
   ArrowLeft, Search, Filter, MoreHorizontal, 
-  Phone, Link as LinkIcon, MessageCircle 
+  Phone, Link as LinkIcon, MessageCircle, Loader2
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { getCandidates } from '@/lib/api';
+import { getCandidates, evaluateCandidate } from '@/lib/api';
 
 interface Candidate {
   _id: string;
@@ -35,9 +35,10 @@ export default function ApplicantsPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [evaluatingCandidateId, setEvaluatingCandidateId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!authLoading && (!user || user.role !== 'admin')) {
+    if (!authLoading && (!user || (user.role !== 'admin' && user.role !== 'recruiter'))) {
       router.push('/');
       return;
     }
@@ -64,7 +65,22 @@ export default function ApplicantsPage() {
     return matchesSearch && matchesStatus;
   });
 
-  if (authLoading || !user || user.role !== 'admin') return null;
+  const handleEvaluate = async (e: React.MouseEvent, candidateId: string) => {
+    e.stopPropagation();
+    if (!token) return;
+    setEvaluatingCandidateId(candidateId);
+    try {
+      await evaluateCandidate(candidateId, token);
+      await fetchCandidates();
+    } catch (err) {
+      console.error("Evaluation failed:", err);
+      alert("Failed to evaluate candidate.");
+    } finally {
+      setEvaluatingCandidateId(null);
+    }
+  };
+
+  if (authLoading || !user || (user.role !== 'admin' && user.role !== 'recruiter')) return null;
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
@@ -183,15 +199,6 @@ export default function ApplicantsPage() {
                               <LinkIcon size={18} />
                             </button>
                             <a 
-                              href={`https://wa.me/${cand.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hello ${cand.name}, you have been selected for the interview. Please attend here: ${cand.interview_link}`)}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
-                              title="Send WhatsApp"
-                            >
-                              <MessageCircle size={18} />
-                            </a>
-                            <a 
                               href={`https://t.me/share/url?url=${encodeURIComponent(cand.interview_link!)}&text=${encodeURIComponent(`Hello ${cand.name}, you have been selected for the interview. Please attend here:`)}`}
                               target="_blank"
                               rel="noopener noreferrer"
@@ -201,6 +208,21 @@ export default function ApplicantsPage() {
                               <span className="font-bold text-xs">TG</span>
                             </a>
                           </div>
+                        ) : cand.selection_status === 'Pending' ? (
+                          <button
+                            onClick={(e) => handleEvaluate(e, cand._id)}
+                            disabled={evaluatingCandidateId === cand._id}
+                            className="px-4 py-2 bg-slate-900 text-white rounded-xl font-bold text-xs hover:bg-slate-800 transition-all flex items-center gap-2 disabled:opacity-50"
+                          >
+                            {evaluatingCandidateId === cand._id ? (
+                              <>
+                                <Loader2 size={14} className="animate-spin" />
+                                Evaluating...
+                              </>
+                            ) : (
+                              "Evaluate Candidate"
+                            )}
+                          </button>
                         ) : (
                           <span className="text-slate-300 text-xs italic">No Link</span>
                         )}
