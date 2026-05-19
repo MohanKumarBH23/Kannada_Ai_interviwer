@@ -159,8 +159,8 @@ export default function ApplicantsPage() {
                 filteredCandidates.map((cand) => (
                   <tr 
                     key={cand._id} 
-                    onClick={() => cand.session_id && router.push(`/results/${cand.session_id}`)}
-                    className={`hover:bg-slate-50/50 transition-colors group ${cand.session_id ? 'cursor-pointer' : 'cursor-default'}`}
+                    onClick={() => cand.status === 'completed' && cand.session_id && router.push(`/results/${cand.session_id}`)}
+                    className={`hover:bg-slate-50/50 transition-colors group ${cand.status === 'completed' && cand.session_id ? 'cursor-pointer' : 'cursor-default'}`}
                   >
                     <td className="px-8 py-6">
                       <div className="flex flex-col">
@@ -189,7 +189,8 @@ export default function ApplicantsPage() {
                         {cand.interview_link && cand.selection_status === 'Selected' ? (
                           <div className="flex gap-2">
                             <button 
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 navigator.clipboard.writeText(cand.interview_link!);
                                 alert("Link copied!");
                               }}
@@ -200,6 +201,7 @@ export default function ApplicantsPage() {
                             </button>
                             <a 
                               href={`https://t.me/share/url?url=${encodeURIComponent(cand.interview_link!)}&text=${encodeURIComponent(`Hello ${cand.name}, you have been selected for the interview. Please attend here:`)}`}
+                              onClick={(e) => e.stopPropagation()}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="p-2.5 rounded-xl bg-sky-50 text-sky-600 hover:bg-sky-600 hover:text-white transition-all shadow-sm"
@@ -210,7 +212,10 @@ export default function ApplicantsPage() {
                           </div>
                         ) : cand.selection_status === 'Pending' ? (
                           <button
-                            onClick={(e) => handleEvaluate(e, cand._id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEvaluate(e, cand._id);
+                            }}
                             disabled={evaluatingCandidateId === cand._id}
                             className="px-4 py-2 bg-slate-900 text-white rounded-xl font-bold text-xs hover:bg-slate-800 transition-all flex items-center gap-2 disabled:opacity-50"
                           >
@@ -226,7 +231,7 @@ export default function ApplicantsPage() {
                         ) : (
                           <span className="text-slate-300 text-xs italic">No Link</span>
                         )}
-                        {cand.session_id && (
+                        {cand.status === 'completed' && cand.session_id && (
                           <button 
                             onClick={(e) => {
                               e.stopPropagation();
@@ -238,7 +243,10 @@ export default function ApplicantsPage() {
                             <ArrowLeft size={18} className="rotate-180" />
                           </button>
                         )}
-                        <button className="p-2.5 rounded-xl hover:bg-white transition-colors text-slate-300 hover:text-teal-600">
+                        <button 
+                          onClick={(e) => e.stopPropagation()}
+                          className="p-2.5 rounded-xl hover:bg-white transition-colors text-slate-300 hover:text-teal-600"
+                        >
                           <MoreHorizontal size={18} />
                         </button>
                       </div>
