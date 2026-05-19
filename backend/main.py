@@ -259,8 +259,12 @@ async def get_all_candidates_admin(user: dict = Depends(read_users_me)):
         job = await jobs_collection.find_one({"_id": ObjectId(c["job_id"])})
         c["job_title"] = job.get("title", "Unknown Job") if job else "Deleted Job"
         
-        # Check for interview session
-        session = await interviews_collection.find_one({"candidate_id": c["_id"]})
+        # Check for interview session (prioritizing completed sessions)
+        session = await interviews_collection.find_one({"candidate_id": c["_id"], "status": "completed"})
+        if not session:
+            sessions = await interviews_collection.find({"candidate_id": c["_id"]}).sort("created_at", -1).to_list(length=1)
+            session = sessions[0] if sessions else None
+            
         if session:
             c["session_id"] = str(session["_id"])
             c["status"] = session.get("status", "Pending")
@@ -898,8 +902,12 @@ async def get_candidates(job_id: str):
     candidates = await cursor.to_list(length=100)
     for c in candidates:
         c["_id"] = str(c["_id"])
-        # Find if there is an interview session for this candidate
-        session = await interviews_collection.find_one({"candidate_id": c["_id"]})
+        # Find if there is an interview session for this candidate (prioritizing completed sessions)
+        session = await interviews_collection.find_one({"candidate_id": c["_id"], "status": "completed"})
+        if not session:
+            sessions = await interviews_collection.find({"candidate_id": c["_id"]}).sort("created_at", -1).to_list(length=1)
+            session = sessions[0] if sessions else None
+            
         if session:
             c["session_id"] = str(session["_id"])
             c["status"] = session.get("status", "Pending")
