@@ -487,7 +487,7 @@ async def start_interview(
             # We don't raise here to allow interview to start without resume if parsing fails
 
     # Fallback to profile resume if none provided in the request
-    if not resume_text and user.get("resume_text"):
+    if not resume_text and user and user.get("resume_text"):
         resume_text = user.get("resume_text")
         print(f"DEBUG: Using stored resume text from profile ({len(resume_text)} chars)")
 
@@ -558,7 +558,7 @@ async def get_interview(session_id: str, user: Optional[dict] = Depends(get_curr
     session["_id"] = str(session["_id"])
     
     # Restrict results: if it's a hiring interview, only admins see results
-    if session.get("job_id") and user.get("role") != "admin":
+    if session.get("job_id") and (not user or user.get("role") != "admin"):
         session.pop("score", None)
         session.pop("feedback", None)
         
