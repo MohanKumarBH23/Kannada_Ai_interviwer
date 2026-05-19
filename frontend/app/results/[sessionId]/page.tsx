@@ -91,13 +91,11 @@ export default function ResultsPage({ params }: { params: { sessionId: string } 
     );
   }
 
-  // Check if results are hidden
-  // Logic: 
-  // 1. If it's a practice interview, allow the user to see it.
-  // 2. If it's a hiring interview (linked to a candidate_id), only admins can see it.
-  // 3. Otherwise, only admins or the owner can see it.
   const isPractice = session?.is_practice === true;
-  const isResultsHidden = !isPractice && ((!user || user.role !== "admin") || (session?.candidate_id && user?.role !== "admin"));
+  const isResultsHidden = !isPractice && (
+    (!user || (user.role !== "admin" && user.role !== "recruiter")) ||
+    (session?.candidate_id && (user?.role !== "admin" && user?.role !== "recruiter"))
+  );
 
   if (isResultsHidden) {
     return (
@@ -202,7 +200,11 @@ export default function ResultsPage({ params }: { params: { sessionId: string } 
                   <h1 className="text-4xl sm:text-5xl font-black text-slate-900 leading-tight tracking-tight mb-2">
                     ಸಂದರ್ಶನ ಪೂರ್ಣಗೊಂಡಿದೆ!
                   </h1>
-                  <p className="text-slate-400 font-medium text-lg mb-6">Great effort, {user?.name || "Candidate"}!</p>
+                  <p className="text-slate-400 font-medium text-lg mb-6">
+                    {user?.role === "admin" || user?.role === "recruiter"
+                      ? "Reviewing candidate's performance report."
+                      : `Great effort, ${user?.name || "Candidate"}!`}
+                  </p>
                   <div className="flex flex-wrap gap-3 justify-center sm:justify-start">
                     <button
                       onClick={() => router.push("/")}
