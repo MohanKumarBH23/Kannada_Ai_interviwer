@@ -229,12 +229,13 @@ async def get_admin_stats(user: dict = Depends(read_users_me)):
     
     # Filter to only keep interviews belonging to active candidates
     real_interviews = [i for i in all_interviews if str(i.get("candidate_id")) in active_candidate_ids]
-    total_interviews = len(real_interviews)
+    
+    # Only count completed/attended interviews to exclude empty active placeholders
+    completed_interviews = [i for i in real_interviews if i.get("status") == "completed"]
+    total_interviews = len(completed_interviews)
     
     # Unique candidates with completed real interviews
-    completed_candidate_ids = {
-        str(i["candidate_id"]) for i in real_interviews if i.get("status") == "completed"
-    }
+    completed_candidate_ids = {str(i["candidate_id"]) for i in completed_interviews}
     ai_screened_pct = (len(completed_candidate_ids) / total_candidates * 100) if total_candidates > 0 else 0
     
     return {
@@ -561,8 +562,8 @@ async def get_interview(session_id: str, user: Optional[dict] = Depends(get_curr
 
     session["_id"] = str(session["_id"])
     
-    # Restrict results: if it's a hiring interview, only admins see results
-    if session.get("job_id") and (not user or user.get("role") != "admin"):
+    # Restrict results: if it's a hiring interview, only admins/recruiters see results
+    if session.get("job_id") and (not user or user.get("role") not in ["admin", "recruiter"]):
         session.pop("score", None)
         session.pop("feedback", None)
         
@@ -742,7 +743,7 @@ async def delete_interview(session_id: str, user: dict = Depends(read_users_me))
         )
 
     # Ownership check
-    if session.get("user_id") != user["_id"] and user.get("role") != "admin":
+    if session.get("user_id") != user["_id"] and user.get("role") not in ["admin", "recruiter"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to delete this session",
@@ -759,16 +760,16 @@ async def get_interview_report(session_id: str, user: dict = Depends(read_users_
         raise HTTPException(status_code=404, detail="Interview session not found")
 
     # Ownership check
-    if session.get("user_id") != user["_id"] and user.get("role") != "admin":
+    if session.get("user_id") != user["_id"] and user.get("role") not in ["admin", "recruiter"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You do not have permission to access this session",
         )
 
-    # Hiring interview restriction: only admins see reports for REAL job applications
+    # Hiring interview restriction: only admins/recruiters see reports for REAL job applications
     # Practice interviews are allowed for the candidate themselves
     is_practice = session.get("is_practice") == True
-    if session.get("job_id") and user.get("role") != "admin" and not is_practice:
+    if session.get("job_id") and user.get("role") not in ["admin", "recruiter"] and not is_practice:
          raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Candidate results for real applications are restricted to the hiring team",
