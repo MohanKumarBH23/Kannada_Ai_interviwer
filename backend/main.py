@@ -214,22 +214,28 @@ async def get_admin_stats(user: dict = Depends(read_users_me)):
         raise HTTPException(status_code=403, detail="Not authorized")
     
     total_jobs = await jobs_collection.count_documents({})
-    total_candidates = await candidates_collection.count_documents({})
-    # Count only real candidate interviews (not practice) that are linked to existing candidates
-    # We can use an aggregation to be precise, or just filter is_practice
-    # For now, let's filter is_practice and ensure they are valid sessions
-    total_interviews = await interviews_collection.count_documents({
-        "is_practice": {"$ne": True},
-        "candidate_id": {"$exists": True, "$ne": ""}
-    })
     
-    # Calculate AI Screened percentage based on completed candidate interviews
-    ai_screened = await interviews_collection.count_documents({
+    # Get all active candidate IDs
+    active_candidates_cursor = candidates_collection.find({}, {"_id": 1})
+    active_candidate_ids = {str(c["_id"]) async for c in active_candidates_cursor}
+    total_candidates = len(active_candidate_ids)
+    
+    # Get all interviews that are NOT practice
+    cursor = interviews_collection.find({
         "is_practice": {"$ne": True},
-        "status": "completed",
         "candidate_id": {"$exists": True, "$ne": ""}
     })
-    ai_screened_pct = (ai_screened / total_candidates * 100) if total_candidates > 0 else 0
+    all_interviews = await cursor.to_list(length=5000)
+    
+    # Filter to only keep interviews belonging to active candidates
+    real_interviews = [i for i in all_interviews if str(i.get("candidate_id")) in active_candidate_ids]
+    total_interviews = len(real_interviews)
+    
+    # Unique candidates with completed real interviews
+    completed_candidate_ids = {
+        str(i["candidate_id"]) for i in real_interviews if i.get("status") == "completed"
+    }
+    ai_screened_pct = (len(completed_candidate_ids) / total_candidates * 100) if total_candidates > 0 else 0
     
     return {
         "total_jobs": total_jobs,
