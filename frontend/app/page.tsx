@@ -15,8 +15,15 @@ export default function Home() {
   const { login, user, loading: authLoading, logout } = useAuth();
   const router = useRouter();
 
-  // WE REMOVED ALL AUTO-REDIRECTS.
-  // This page stays as the Login Page until the user successfully logs in or clicks continue.
+  useEffect(() => {
+    if (!authLoading && user) {
+      if (user.role === "admin" || user.role === "recruiter") {
+        router.push("/recruiter");
+      } else {
+        router.push("/candidate");
+      }
+    }
+  }, [user, authLoading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,7 +82,7 @@ export default function Home() {
     }
   };
 
-  if (authLoading) {
+  if (authLoading || user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-teal-600"></div>
@@ -84,7 +91,8 @@ export default function Home() {
   }
 
   const isLoggedIn = !!user;
-  const effectiveRole = isLoggedIn ? (user.role === 'admin' || user.role === 'recruiter' ? 'recruiter' : 'candidate') : role;
+  const u = user as any;
+  const effectiveRole = isLoggedIn ? (u.role === 'admin' || u.role === 'recruiter' ? 'recruiter' : 'candidate') : role;
   const isRecruiter = effectiveRole === 'recruiter';
 
   return (
@@ -127,7 +135,7 @@ export default function Home() {
           <div className="text-center space-y-2">
             <h2 className="text-5xl font-black text-slate-900 tracking-tight">{isLoggedIn ? 'Welcome Back' : 'Login'}</h2>
             <p className="text-slate-500 text-lg font-medium">
-              {isLoggedIn ? `Logged in as ${user.name}` : 'Welcome back! Please login to your account.'}
+              {isLoggedIn ? `Logged in as ${u.name}` : 'Welcome back! Please login to your account.'}
             </p>
           </div>
 
@@ -155,20 +163,20 @@ export default function Home() {
             {isLoggedIn ? (
               <div className="space-y-6">
                 <div className="flex flex-col items-center gap-4 py-4">
-                   <div className={`w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold text-white ${user.role === 'admin' || user.role === 'recruiter' ? 'bg-blue-600' : 'bg-teal-600'}`}>
-                      {user.name.charAt(0).toUpperCase()}
+                   <div className={`w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold text-white ${u.role === 'admin' || u.role === 'recruiter' ? 'bg-blue-600' : 'bg-teal-600'}`}>
+                      {u.name.charAt(0).toUpperCase()}
                    </div>
                    <div className="text-center">
-                      <p className="font-bold text-xl text-slate-900">{user.name}</p>
-                      <p className="text-slate-500">{user.email}</p>
-                      <span className={`mt-2 inline-block px-3 py-1 rounded-full text-xs font-bold uppercase ${user.role === 'admin' || user.role === 'recruiter' ? 'bg-blue-100 text-blue-700' : 'bg-teal-100 text-teal-700'}`}>
-                        {user.role}
+                      <p className="font-bold text-xl text-slate-900">{u.name}</p>
+                      <p className="text-slate-500">{u.email}</p>
+                      <span className={`mt-2 inline-block px-3 py-1 rounded-full text-xs font-bold uppercase ${u.role === 'admin' || u.role === 'recruiter' ? 'bg-blue-100 text-blue-700' : 'bg-teal-100 text-teal-700'}`}>
+                        {u.role}
                       </span>
                    </div>
                 </div>
                 <button
-                  onClick={() => router.push(user.role === 'admin' || user.role === 'recruiter' ? '/recruiter' : '/candidate')}
-                  className={`w-full py-5 rounded-2xl font-bold text-lg text-white shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98] ${user.role === 'admin' || user.role === 'recruiter' ? 'bg-blue-600 shadow-blue-500/20' : 'bg-teal-600 shadow-teal-500/20'}`}
+                  onClick={() => router.push(u.role === 'admin' || u.role === 'recruiter' ? '/recruiter' : '/candidate')}
+                  className={`w-full py-5 rounded-2xl font-bold text-lg text-white shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98] ${u.role === 'admin' || u.role === 'recruiter' ? 'bg-blue-600 shadow-blue-500/20' : 'bg-teal-600 shadow-teal-500/20'}`}
                 >
                   Continue to Dashboard
                 </button>
