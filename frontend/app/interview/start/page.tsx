@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { startInterview } from "@/lib/api";
 import { Loader2, Sparkles, AlertCircle } from "lucide-react";
 
-export default function InterviewStartPage() {
+function InterviewStartContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, token, loading: authLoading } = useAuth();
@@ -101,5 +101,21 @@ export default function InterviewStartPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function InterviewStartPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white rounded-[2.5rem] shadow-2xl p-10 border border-slate-100 text-center space-y-8 animate-fade-in animate-pulse">
+          <div className="flex justify-center">
+            <Loader2 className="w-8 h-8 text-teal-600 animate-spin" />
+          </div>
+        </div>
+      </div>
+    }>
+      <InterviewStartContent />
+    </Suspense>
   );
 }
