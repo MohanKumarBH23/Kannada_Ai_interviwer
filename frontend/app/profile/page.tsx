@@ -6,10 +6,8 @@ import { useRouter } from "next/navigation";
 import { updateProfile, uploadProfilePicture } from "@/lib/api";
 import { 
   User, Mail, Phone, MapPin, Briefcase, 
-  Award, Save, Loader2, FileText, Sparkles,
-  ArrowLeft, CheckCircle2, Languages, RefreshCw,
-  Printer, Download, Eye, ExternalLink, PenTool,
-  Camera, Upload
+  Award, Save, Loader2, ArrowLeft, Languages, 
+  Download, Camera
 } from "lucide-react";
 import Link from "next/link";
 

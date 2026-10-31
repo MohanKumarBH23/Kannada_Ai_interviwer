@@ -6,11 +6,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { 
   Plus, Briefcase, Users, BarChart3, Clock, 
-  MapPin, DollarSign, FileText, Zap, Search, 
-  Filter, ChevronRight, LayoutDashboard, Settings,
-  LogOut, Bell, ExternalLink, MoreVertical, Trash2, Edit,
-  Mail, Phone, CheckCircle2, AlertCircle, TrendingUp,
-  Target, PieChart, Activity, Sparkles, Brain, ListChecks
+  FileText, Zap, Search, ChevronRight, 
+  LayoutDashboard, LogOut, CheckCircle2, 
+  Target, Activity, Sparkles, Brain
 } from "lucide-react";
 import { getJobs, createJob, getAdminStats, getAllCandidates, getAnalytics, parseJD, generateQuestions } from "@/lib/api";
 
@@ -122,30 +120,33 @@ export default function RecruiterDashboard() {
     if (!rawJD) return;
     setIsParsingJD(true);
     try {
-      const result = await parseJD(rawJD, token!);
+      const parsed = await parseJD(rawJD, token!);
       setJobFormData({
-        ...jobFormData,
-        title: result.title || jobFormData.title,
-        description: result.description || jobFormData.description,
-        eligibility: result.eligibility || jobFormData.eligibility,
-        requirements: result.skills ? result.skills.join(", ") : jobFormData.requirements
+        title: parsed.title || "",
+        location: parsed.location || "Bangalore",
+        salary: parsed.salary || "Competitive",
+        description: parsed.description || "",
+        requirements: parsed.requirements ? parsed.requirements.join("\n") : "",
+        eligibility: parsed.eligibility || ""
       });
-      if (result.title) {
-        handleGenerateQuestions(result.title, result.skills || []);
+
+      // Auto-generate Kannada adaptive questions
+      if (parsed.title) {
+        handleGenerateQuestions(parsed.title, parsed.requirements || []);
       }
     } catch (error) {
-      console.error("JD parsing failed:", error);
-      alert("Failed to parse JD. Please enter details manually.");
+      console.error("JD Parsing failed:", error);
+      alert("Failed to parse JD automatically. Please fill manually.");
     } finally {
       setIsParsingJD(false);
     }
   };
 
-  const handleGenerateQuestions = async (title: string, skills: string[]) => {
+  const handleGenerateQuestions = async (role: string, reqs: string[]) => {
     setIsGeneratingQuestions(true);
     try {
-      const pool = await generateQuestions(title, skills, token!);
-      setQuestionPool(pool);
+      const questions = await generateQuestions(role, reqs, token!);
+      setQuestionPool(questions);
     } catch (error) {
       console.error("Question generation failed:", error);
     } finally {
@@ -185,90 +186,83 @@ export default function RecruiterDashboard() {
 
   if (authLoading || !user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-10 w-10 border-2 border-primary border-t-accent"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] flex text-slate-900 font-sans">
+    <div className="min-h-screen bg-background flex text-foreground font-sans">
       {/* Sidebar */}
-      <aside className="w-72 bg-white border-r border-slate-200 hidden xl:flex flex-col sticky top-0 h-screen">
-        <div className="p-8">
-          <div className="flex items-center gap-3 mb-10">
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
-              <Briefcase size={22} />
-            </div>
-            <span className="text-xl font-black tracking-tight">Recruiter<span className="text-blue-600">Pro</span></span>
+      <aside className="w-72 bg-surface border-r border-border hidden xl:flex flex-col sticky top-0 h-screen shadow-sm">
+        <div className="p-6">
+          <div className="flex items-center gap-2.5 mb-8">
+            <span className="w-2.5 h-2.5 rounded-full bg-accent inline-block"></span>
+            <span className="text-xl font-black text-primary tracking-tight">ಕನ್ನಡ AI</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-md bg-accent-subtle text-accent-subtle-foreground font-bold uppercase tracking-wider">Recruiter</span>
           </div>
 
-          <nav className="space-y-2">
+          <nav className="space-y-1">
             {[
-              { id: 'overview', icon: LayoutDashboard, label: 'Dashboard' },
-              { id: 'jobs', icon: Briefcase, label: 'My Job Posts' },
-              { id: 'candidates', icon: Users, label: 'Candidates' },
-              { id: 'analytics', icon: BarChart3, label: 'Analytics' }
+              { id: 'overview', icon: LayoutDashboard, label: 'ಡ್ಯಾಶ್‌ಬೋರ್ಡ್ (Overview)' },
+              { id: 'jobs', icon: Briefcase, label: 'ಉದ್ಯೋಗ ಪ್ರಚಾರಗಳು (Jobs)' },
+              { id: 'candidates', icon: Users, label: 'ಅಭ್ಯರ್ಥಿಗಳು (Candidates)' },
+              { id: 'analytics', icon: BarChart3, label: 'ವಿಶ್ಲೇಷಣೆ (Analytics)' }
             ].map(item => (
               <button 
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-sm font-bold transition-all ${activeTab === item.id ? 'bg-blue-50 text-blue-600' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
+                className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-xs font-semibold transition-colors ${activeTab === item.id ? 'bg-accent-subtle text-accent-subtle-foreground font-bold border-l-2 border-accent' : 'text-foreground-muted hover:bg-surface-raised hover:text-foreground'}`}
               >
-                <item.icon size={20} />
-                {item.label}
+                <item.icon size={18} className={activeTab === item.id ? 'text-accent' : ''} />
+                <span>{item.label}</span>
               </button>
             ))}
           </nav>
         </div>
 
-        <div className="mt-auto p-8 border-t border-slate-100">
-          <div className="flex items-center gap-3 mb-6 p-2 rounded-2xl bg-slate-50 border border-slate-100">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold">
-              {user.name.charAt(0)}
+        <div className="mt-auto p-6 border-t border-border">
+          <div className="flex items-center gap-3 mb-4 p-2.5 rounded-xl bg-surface-raised border border-border">
+            <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center text-white font-bold text-sm">
+              {user.name.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold truncate">{user.name}</p>
-              <p className="text-xs text-slate-500 truncate capitalize">{user.role}</p>
+              <p className="text-xs font-bold text-foreground truncate">{user.name}</p>
+              <p className="text-[11px] text-foreground-muted truncate capitalize">{user.role}</p>
             </div>
           </div>
           <button 
             onClick={logout}
-            className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-rose-500 hover:bg-rose-50 rounded-2xl transition-all"
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-foreground-muted hover:text-red-600 rounded-lg transition-colors"
           >
-            <LogOut size={18} />
-            Sign Out
+            <LogOut size={16} />
+            <span>ಲಾಗ್ ಔಟ್ (Sign Out)</span>
           </button>
         </div>
       </aside>
 
       {/* Main Content */}
       <main className="flex-1 min-h-screen overflow-y-auto">
-        <header className="bg-white/80 backdrop-blur-md sticky top-0 z-30 border-b border-slate-200 px-8 py-4 flex items-center justify-between">
-          <div className="xl:hidden flex items-center gap-3">
-             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white">
-                <Briefcase size={18} />
-             </div>
-             <span className="font-bold">RecruiterPro</span>
+        <header className="bg-surface/90 backdrop-blur-md sticky top-0 z-30 border-b border-border px-8 py-4 flex items-center justify-between shadow-sm">
+          <div className="xl:hidden flex items-center gap-2.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-accent inline-block"></span>
+            <span className="font-bold text-primary">ಕನ್ನಡ AI Recruiter</span>
           </div>
           
-          <div className="hidden xl:flex items-center gap-2 text-sm text-slate-400 font-medium">
-            <span>Pages</span>
+          <div className="hidden xl:flex items-center gap-2 text-xs text-foreground-muted font-medium">
+            <span>ಮುಖ್ಯಪುಟ</span>
             <ChevronRight size={14} />
-            <span className="text-slate-900 font-bold capitalize">{activeTab}</span>
+            <span className="text-foreground font-bold capitalize">{activeTab}</span>
           </div>
 
-          <div className="flex items-center gap-4">
-            <button className="p-2.5 text-slate-400 hover:text-blue-600 bg-white border border-slate-200 rounded-xl transition-all relative">
-              <Bell size={20} />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
-            </button>
+          <div className="flex items-center gap-3">
             <button 
               onClick={() => setIsPostJobModalOpen(true)}
-              className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all flex items-center gap-2"
+              className="px-4 py-2 bg-primary hover:bg-[#131F37] text-white rounded-xl font-semibold text-xs shadow-sm transition-colors flex items-center gap-2"
             >
-              <Plus size={18} />
-              Post Job
+              <Plus size={16} />
+              <span>ಹೊಸ ಹುದ್ದೆ ಸೇರಿಸಿ (Post Job)</span>
             </button>
           </div>
         </header>
@@ -276,68 +270,68 @@ export default function RecruiterDashboard() {
         <div className="p-8 max-w-7xl mx-auto space-y-8">
           {activeTab === "overview" && (
             <>
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                  <h1 className="text-3xl font-black tracking-tight mb-2">Welcome Back, {user.name.split(' ')[0]}! 👋</h1>
-                  <p className="text-slate-500 font-medium">Here's what's happening with your recruitment pipelines today.</p>
+                  <h1 className="text-2xl font-black text-foreground tracking-tight">ಸುಸ್ವಾಗತ, {user.name.split(' ')[0]}! 👋</h1>
+                  <p className="text-foreground-muted text-xs mt-0.5">ಇಂದಿನ ನೇಮಕಾತಿ ಅಂಕಿಅಂಶಗಳು ಮತ್ತು ಅಭ್ಯರ್ಥಿ ಪ್ರಗತಿ ವಿವರಗಳು.</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                  { label: 'Active Jobs', value: stats.total_jobs, icon: Briefcase, color: 'blue' },
-                  { label: 'Total Applicants', value: stats.total_applicants, icon: Users, color: 'emerald' },
-                  { label: 'Interviews', value: stats.total_interviews, icon: Clock, color: 'amber' },
-                  { label: 'AI Screened', value: `${stats.ai_screened_pct}%`, icon: Zap, color: 'purple' }
+                  { label: 'ಸಕ್ರಿಯ ಹುದ್ದೆಗಳು (Active Jobs)', value: stats.total_jobs, icon: Briefcase, color: 'text-primary' },
+                  { label: 'ಒಟ್ಟು ಅಭ್ಯರ್ಥಿಗಳು (Applicants)', value: stats.total_applicants, icon: Users, color: 'text-emerald-600' },
+                  { label: 'ಸಂದರ್ಶನಗಳು (Interviews)', value: stats.total_interviews, icon: Clock, color: 'text-accent' },
+                  { label: 'AI ಸ್ಕ್ರೀನಿಂಗ್ ದಕ್ಷತೆ', value: `${stats.ai_screened_pct}%`, icon: Zap, color: 'text-amber-600' }
                 ].map((stat, idx) => (
-                  <div key={idx} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                    <div className={`w-12 h-12 bg-${stat.color}-50 text-${stat.color}-600 rounded-2xl flex items-center justify-center mb-4`}>
-                      <stat.icon size={24} />
+                  <div key={idx} className="bg-surface p-5 rounded-xl border border-border shadow-sm space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-foreground-muted text-xs font-semibold uppercase tracking-wider">{stat.label}</p>
+                      <stat.icon size={18} className={stat.color} />
                     </div>
-                    <p className="text-slate-500 text-sm font-bold mb-1 uppercase tracking-wider">{stat.label}</p>
-                    <h3 className="text-3xl font-black">{stat.value}</h3>
+                    <h3 className="text-2xl font-black text-foreground">{stat.value}</h3>
                   </div>
                 ))}
               </div>
 
-              <div className="bg-white rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm">
-                <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+              <div className="bg-surface rounded-2xl border border-border overflow-hidden shadow-sm">
+                <div className="p-6 border-b border-border flex items-center justify-between">
                   <div>
-                    <h2 className="text-xl font-black tracking-tight">Recent Job Postings</h2>
-                    <p className="text-sm text-slate-500 font-medium">Manage and monitor your current job openings.</p>
+                    <h2 className="text-base font-black text-foreground tracking-tight">ಇತ್ತೀಚಿನ ಉದ್ಯೋಗ ಪ್ರಚಾರಗಳು</h2>
+                    <p className="text-xs text-foreground-muted">ಸಕ್ರಿಯವಾಗಿರುವ ಉದ್ಯೋಗಗಳು ಮತ್ತು ಅಭ್ಯರ್ಥಿಗಳ ಮಾಹಿತಿ.</p>
                   </div>
-                  <button onClick={() => setActiveTab("jobs")} className="text-sm font-bold text-blue-600 hover:underline flex items-center gap-1">
-                    View All <ChevronRight size={16} />
+                  <button onClick={() => setActiveTab("jobs")} className="text-xs font-bold text-accent hover:underline flex items-center gap-1">
+                    ಎಲ್ಲವನ್ನೂ ವೀಕ್ಷಿಸಿ <ChevronRight size={14} />
                   </button>
                 </div>
                 
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left">
+                  <table className="w-full text-left text-xs">
                     <thead>
-                      <tr className="bg-slate-50/50 text-slate-500 text-xs font-bold uppercase tracking-widest">
-                        <th className="px-8 py-5">Job Title</th>
-                        <th className="px-8 py-5">Location</th>
-                        <th className="px-8 py-5">Status</th>
-                        <th className="px-8 py-5">Actions</th>
+                      <tr className="bg-surface-raised text-foreground-muted font-semibold uppercase tracking-wider">
+                        <th className="px-6 py-3.5">ಉದ್ಯೋಗ ಶೀರ್ಷಿಕೆ</th>
+                        <th className="px-6 py-3.5">ಸ್ಥಳ (Location)</th>
+                        <th className="px-6 py-3.5">ಸ್ಥಿತಿ (Status)</th>
+                        <th className="px-6 py-3.5">ಕ್ರಮಗಳು (Actions)</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-border">
                       {loading ? (
-                        <tr><td colSpan={4} className="px-8 py-20 text-center"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600 mx-auto"></div></td></tr>
+                        <tr><td colSpan={4} className="px-6 py-12 text-center"><div className="animate-spin rounded-full h-6 w-6 border-2 border-primary border-t-accent mx-auto"></div></td></tr>
                       ) : jobs.length === 0 ? (
-                        <tr><td colSpan={4} className="px-8 py-20 text-center font-medium text-slate-500">No jobs found.</td></tr>
+                        <tr><td colSpan={4} className="px-6 py-12 text-center font-medium text-foreground-muted">ಯಾವುದೇ ಉದ್ಯೋಗಗಳು ಕಂಡುಬಂದಿಲ್ಲ.</td></tr>
                       ) : (
                         jobs.slice(0, 5).map((job) => (
-                          <tr key={job._id} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="px-8 py-5 font-bold">{job.title}</td>
-                            <td className="px-8 py-5 text-slate-500 font-medium">{job.location}</td>
-                            <td className="px-8 py-5">
-                              <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${job.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700'}`}>
+                          <tr key={job._id} className="hover:bg-surface-raised/50 transition-colors">
+                            <td className="px-6 py-4 font-bold text-foreground">{job.title}</td>
+                            <td className="px-6 py-4 text-foreground-muted font-medium">{job.location}</td>
+                            <td className="px-6 py-4">
+                              <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${job.is_active ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-surface-raised text-foreground-muted border border-border'}`}>
                                 {job.is_active ? 'Active' : 'Closed'}
                               </span>
                             </td>
-                            <td className="px-8 py-5">
-                              <Link href={`/hiring/${job._id}/applicants`} className="text-blue-600 hover:underline font-bold text-sm">View Details</Link>
+                            <td className="px-6 py-4">
+                              <Link href={`/hiring/${job._id}/applicants`} className="text-accent hover:underline font-semibold">ಅಭ್ಯರ್ಥಿಗಳನ್ನು ವೀಕ್ಷಿಸಿ</Link>
                             </td>
                           </tr>
                         ))
@@ -350,19 +344,19 @@ export default function RecruiterDashboard() {
           )}
 
           {activeTab === "jobs" && (
-            <div className="space-y-6">
-              <h1 className="text-3xl font-black tracking-tight">My Job Postings</h1>
-              <div className="grid grid-cols-1 gap-4">
+            <div className="space-y-4">
+              <h1 className="text-2xl font-black text-foreground tracking-tight">ನನ್ನ ಉದ್ಯೋಗ ಪ್ರಚಾರಗಳು</h1>
+              <div className="grid grid-cols-1 gap-3">
                 {jobs.map(job => (
-                  <div key={job._id} className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex items-center justify-between">
-                    <div className="flex items-center gap-5">
-                      <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center text-2xl font-black">{job.title.charAt(0)}</div>
+                  <div key={job._id} className="bg-surface rounded-xl p-5 border border-border shadow-sm flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-accent-subtle text-accent-subtle-foreground rounded-xl flex items-center justify-center text-lg font-black border border-amber-200/50">{job.title.charAt(0)}</div>
                       <div>
-                        <h3 className="text-xl font-black">{job.title}</h3>
-                        <p className="text-sm font-bold text-slate-500">{job.location} • {job.salary}</p>
+                        <h3 className="text-base font-bold text-foreground">{job.title}</h3>
+                        <p className="text-xs text-foreground-muted">{job.location} • {job.salary}</p>
                       </div>
                     </div>
-                    <Link href={`/hiring/${job._id}/applicants`} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-blue-600/10 hover:bg-blue-700 transition-all">View Applicants</Link>
+                    <Link href={`/hiring/${job._id}/applicants`} className="px-4 py-2 bg-primary hover:bg-[#131F37] text-white rounded-xl font-semibold text-xs shadow-sm transition-colors">ಅಭ್ಯರ್ಥಿಗಳ ಪಟ್ಟಿ</Link>
                   </div>
                 ))}
               </div>
@@ -370,50 +364,50 @@ export default function RecruiterDashboard() {
           )}
 
           {activeTab === "candidates" && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="space-y-4 animate-fade-in">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <h1 className="text-3xl font-black tracking-tight">All Candidates</h1>
-                <div className="relative w-full md:w-96">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <h1 className="text-2xl font-black text-foreground tracking-tight">ಎಲ್ಲಾ ಅಭ್ಯರ್ಥಿಗಳು (Candidates)</h1>
+                <div className="relative w-full md:w-80">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-foreground-muted" size={16} />
                   <input 
                     type="text" 
-                    placeholder="Search candidates by name or role..."
+                    placeholder="ಹೆಸರು ಅಥವಾ ಹುದ್ದೆ ಹುಡುಕಿ..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-600/5 focus:border-blue-600 transition-all font-bold text-sm"
+                    className="w-full pl-10 pr-3.5 py-2.5 bg-background border border-border rounded-xl focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors font-medium text-xs text-foreground"
                   />
                 </div>
               </div>
 
-              <div className="bg-white rounded-[2.5rem] border border-slate-200 overflow-hidden shadow-sm">
+              <div className="bg-surface rounded-2xl border border-border overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left">
+                  <table className="w-full text-left text-xs">
                     <thead>
-                      <tr className="bg-slate-50/50 text-slate-500 text-xs font-bold uppercase tracking-widest">
-                        <th className="px-8 py-6">Candidate</th>
-                        <th className="px-8 py-6">Applied For</th>
-                        <th className="px-8 py-6">Status</th>
-                        <th className="px-8 py-6">AI Score</th>
-                        <th className="px-8 py-6">Actions</th>
+                      <tr className="bg-surface-raised text-foreground-muted font-semibold uppercase tracking-wider">
+                        <th className="px-6 py-3.5">ಅಭ್ಯರ್ಥಿ ಹೆಸರು</th>
+                        <th className="px-6 py-3.5">ಅರ್ಜಿ ಸಲ್ಲಿಸಿದ ಹುದ್ದೆ</th>
+                        <th className="px-6 py-3.5">ಸ್ಥಿತಿ</th>
+                        <th className="px-6 py-3.5">AI ಸ್ಕೋರ್</th>
+                        <th className="px-6 py-3.5">ಕ್ರಮಗಳು</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-border">
                       {candidates
                         .filter(c => 
                           c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           c.job_title?.toLowerCase().includes(searchTerm.toLowerCase())
                         )
                         .map(c => (
-                        <tr key={c._id} className="hover:bg-slate-50/30 transition-colors">
-                          <td className="px-8 py-6 font-bold">{c.name}</td>
-                          <td className="px-8 py-6 text-sm font-bold text-slate-700">{c.job_title}</td>
-                          <td className="px-8 py-6">
-                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${c.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>{c.status}</span>
+                        <tr key={c._id} className="hover:bg-surface-raised/50 transition-colors">
+                          <td className="px-6 py-4 font-bold text-foreground">{c.name}</td>
+                          <td className="px-6 py-4 text-foreground-muted font-medium">{c.job_title}</td>
+                          <td className="px-6 py-4">
+                            <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${c.status === 'completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-accent-subtle text-accent-subtle-foreground border border-amber-200'}`}>{c.status}</span>
                           </td>
-                          <td className="px-8 py-6">
-                            {c.ai_score !== undefined ? <span className="font-black text-blue-600">{c.ai_score}%</span> : <span className="text-slate-400 font-bold">Not Scored</span>}
+                          <td className="px-6 py-4">
+                            {c.ai_score !== undefined ? <span className="font-bold text-accent">{c.ai_score}%</span> : <span className="text-foreground-muted">Not Scored</span>}
                           </td>
-                          <td className="px-8 py-6"><Link href={`/hiring/${c.job_id}/applicants`} className="text-blue-600 hover:underline font-bold text-sm">View Results</Link></td>
+                          <td className="px-6 py-4"><Link href={`/hiring/${c.job_id}/applicants`} className="text-accent hover:underline font-semibold">ಫಲಿತಾಂಶ ನೋಡಿ</Link></td>
                         </tr>
                       ))}
                     </tbody>
@@ -424,107 +418,41 @@ export default function RecruiterDashboard() {
           )}
 
           {activeTab === "analytics" && analyticsData && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-               <div>
-                  <h1 className="text-3xl font-black tracking-tight mb-2">Performance Analytics</h1>
-                  <p className="text-slate-500 font-medium">Real-time candidate performance and conversion insights.</p>
-               </div>
+            <div className="space-y-6 animate-fade-in">
+              <div>
+                <h1 className="text-2xl font-black text-foreground tracking-tight">ಕಾರ್ಯಕ್ಷಮತೆಯ ವಿಶ್ಲೇಷಣೆ (Analytics)</h1>
+                <p className="text-foreground-muted text-xs">ನೈಜ ಸಮಯದ ಅಭ್ಯರ್ಥಿ ಕಾರ್ಯಕ್ಷಮತೆ ಮತ್ತು ಪರಿವರ್ತನೆ ಒಳನೋಟಗಳು.</p>
+              </div>
 
-               {/* Metrics Row */}
-               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-6">
-                     <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
-                        <Activity size={28} />
-                     </div>
-                     <div>
-                        <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Avg. Interview Score</p>
-                        <h3 className="text-3xl font-black">{analyticsData.performance.avg_score}%</h3>
-                     </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-surface p-6 rounded-xl border border-border shadow-sm flex items-center gap-4">
+                  <div className="w-12 h-12 bg-accent-subtle text-accent rounded-xl flex items-center justify-center border border-amber-200/50">
+                    <Activity size={24} />
                   </div>
-                  <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-6">
-                     <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center">
-                        <Target size={28} />
-                     </div>
-                     <div>
-                        <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Highest Score</p>
-                        <h3 className="text-3xl font-black">{analyticsData.performance.highest_score}%</h3>
-                     </div>
+                  <div>
+                    <p className="text-foreground-muted text-xs font-semibold uppercase tracking-wider mb-0.5">ಸರಾಸರಿ ಸಂದರ್ಶನ ಸ್ಕೋರ್</p>
+                    <h3 className="text-2xl font-black text-foreground">{analyticsData.performance.avg_score}%</h3>
                   </div>
-                  <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm flex items-center gap-6">
-                     <div className="w-14 h-14 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center">
-                        <Zap size={28} />
-                     </div>
-                     <div>
-                        <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Time Saved (AI)</p>
-                        <h3 className="text-3xl font-black">{analyticsData.impact.time_saved_hours} hrs</h3>
-                     </div>
+                </div>
+                <div className="bg-surface p-6 rounded-xl border border-border shadow-sm flex items-center gap-4">
+                  <div className="w-12 h-12 bg-emerald-50 text-emerald-700 rounded-xl flex items-center justify-center border border-emerald-200/50">
+                    <Target size={24} />
                   </div>
-               </div>
-
-               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  {/* Funnel */}
-                  <div className="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm">
-                    <h3 className="text-xl font-black mb-8 flex items-center gap-3">
-                       <PieChart className="text-blue-600" />
-                       Hiring Funnel (Real Stats)
-                    </h3>
-                    <div className="space-y-6">
-                       {[
-                         { label: 'Total Reach (Estimated)', value: analyticsData.funnel.reach, color: 'slate' },
-                         { label: 'Applications', value: analyticsData.funnel.applications, color: 'blue' },
-                         { label: 'Interviews Started', value: analyticsData.funnel.interviews_started, color: 'indigo' },
-                         { label: 'Interviews Completed', value: analyticsData.funnel.interviews_completed, color: 'emerald' },
-                         { label: 'Shortlisted/Selected', value: analyticsData.funnel.shortlisted, color: 'amber' }
-                       ].map((item, idx) => (
-                         <div key={idx} className="space-y-2">
-                            <div className="flex justify-between text-sm font-bold">
-                               <span className="text-slate-500">{item.label}</span>
-                               <span className="text-slate-900">{item.value}</span>
-                            </div>
-                            <div className="h-4 bg-slate-50 rounded-full overflow-hidden">
-                               <div 
-                                 className={`h-full bg-${item.color}-500 transition-all duration-1000`} 
-                                 style={{ width: `${(item.value / (analyticsData.funnel.reach || 1)) * 100 || 0}%` }}
-                               ></div>
-                            </div>
-                         </div>
-                       ))}
-                    </div>
+                  <div>
+                    <p className="text-foreground-muted text-xs font-semibold uppercase tracking-wider mb-0.5">ಗರಿಷ್ಠ ಸ್ಕೋರ್</p>
+                    <h3 className="text-2xl font-black text-foreground">{analyticsData.performance.highest_score}%</h3>
                   </div>
-
-                  {/* Score Distribution */}
-                  <div className="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-sm">
-                    <h3 className="text-xl font-black mb-8 flex items-center gap-3">
-                       <BarChart3 className="text-blue-600" />
-                       Candidate Score Distribution
-                    </h3>
-                    <div className="flex items-end justify-between h-48 gap-2">
-                       {Object.entries(analyticsData.distribution).map(([range, count]: [string, any]) => {
-                          const maxCount = Math.max(...Object.values(analyticsData.distribution) as number[]);
-                          const height = maxCount > 0 ? (count / maxCount) * 100 : 0;
-                          return (
-                            <div key={range} className="flex-1 flex flex-col items-center gap-3 group">
-                               <div className="relative w-full flex items-end justify-center h-full">
-                                  <div 
-                                    className="w-full bg-blue-100 group-hover:bg-blue-600 transition-all duration-500 rounded-t-xl"
-                                    style={{ height: `${height}%` }}
-                                  ></div>
-                                  <div className="absolute -top-8 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900 text-white text-[10px] font-black py-1 px-2 rounded-lg">
-                                     {count} candidates
-                                  </div>
-                               </div>
-                               <span className="text-[10px] font-black text-slate-400 uppercase">{range}</span>
-                            </div>
-                          );
-                       })}
-                    </div>
-                    <div className="mt-8 pt-8 border-t border-slate-50 text-center">
-                       <p className="text-sm font-bold text-slate-500 italic">
-                          Analysis based on <span className="text-blue-600">{analyticsData.performance.total_scored}</span> real interview sessions.
-                       </p>
-                    </div>
+                </div>
+                <div className="bg-surface p-6 rounded-xl border border-border shadow-sm flex items-center gap-4">
+                  <div className="w-12 h-12 bg-primary/10 text-primary rounded-xl flex items-center justify-center border border-primary/20">
+                    <Zap size={24} />
                   </div>
-               </div>
+                  <div>
+                    <p className="text-foreground-muted text-xs font-semibold uppercase tracking-wider mb-0.5">ಉಳಿತಾಯವಾದ ಸಮಯ (AI)</p>
+                    <h3 className="text-2xl font-black text-foreground">{analyticsData.impact.time_saved_hours} ಗಂಟೆಗಳು</h3>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -532,150 +460,133 @@ export default function RecruiterDashboard() {
 
       {/* Post Job Modal */}
       {isPostJobModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 sm:p-12 overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 overflow-y-auto">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsPostJobModalOpen(false)}></div>
-          <div className="relative bg-white w-full max-w-4xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 my-auto">
-            <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+          <div className="relative bg-surface w-full max-w-4xl rounded-2xl shadow-2xl border border-border overflow-hidden animate-fade-in my-auto">
+            <div className="p-6 border-b border-border flex items-center justify-between">
               <div>
-                <h2 className="text-2xl font-black tracking-tight">Post New Job Campaign</h2>
-                <p className="text-sm text-slate-500 font-medium">Use AI to parse your JD and generate adaptive Kannada questions.</p>
+                <h2 className="text-xl font-black text-foreground tracking-tight">ಹೊಸ ಉದ್ಯೋಗ ಪ್ರಚಾರ ರಚಿಸಿ</h2>
+                <p className="text-xs text-foreground-muted">AI ಬಳಸಿ ನಿಮ್ಮ JD ಯಿಂದ ಕನ್ನಡ ಪ್ರಶ್ನೆಗಳನ್ನು ಸ್ವಯಂಚಾಲಿತವಾಗಿ ಸಿದ್ಧಪಡಿಸಿ.</p>
               </div>
-              <button onClick={() => setIsPostJobModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-900 rounded-xl transition-all">
-                <Plus size={24} className="rotate-45" />
+              <button onClick={() => setIsPostJobModalOpen(false)} className="p-1.5 text-foreground-muted hover:text-foreground rounded-lg transition-colors">
+                <Plus size={20} className="rotate-45" />
               </button>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2">
               {/* Left Side: JD Manager */}
-              <div className="p-8 border-r border-slate-100 bg-slate-50/50">
-                <div className="space-y-6">
-                  <div className="space-y-2">
-                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                      <FileText size={14} className="text-blue-600" />
-                      JD Manager (Paste Job Description)
+              <div className="p-6 border-r border-border bg-surface-raised">
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-foreground-muted uppercase tracking-wider flex items-center gap-2">
+                      <FileText size={14} className="text-accent" />
+                      JD ಮ್ಯಾನೇಜರ್ (ಉದ್ಯೋಗ ವಿವರಣೆ ಪೇಸ್ಟ್ ಮಾಡಿ)
                     </label>
                     <textarea 
-                      rows={10}
-                      placeholder="Paste the full job description here..."
+                      rows={8}
+                      placeholder="ಇಲ್ಲಿ ಸಂಪೂರ್ಣ ಉದ್ಯೋಗ ವಿವರಣೆ ಪೇಸ್ಟ್ ಮಾಡಿ..."
                       value={rawJD}
                       onChange={(e) => setRawJD(e.target.value)}
-                      className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-600/5 focus:border-blue-600 transition-all font-medium text-sm resize-none"
+                      className="w-full px-3.5 py-2.5 bg-background border border-border rounded-xl focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-colors font-medium text-xs text-foreground resize-none"
                     />
                   </div>
                   <button 
                     onClick={handleParseJD}
                     disabled={isParsingJD || !rawJD}
-                    className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-blue-600/20 hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="w-full py-2.5 bg-primary hover:bg-[#131F37] text-white rounded-xl font-semibold text-xs shadow-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {isParsingJD ? (
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
                     ) : (
                       <>
-                        <Sparkles size={18} />
-                        Extract Info & Generate Questions
+                        <Sparkles size={16} />
+                        ಮಾಹಿತಿ ಗುರುತಿಸಿ & ಪ್ರಶ್ನೆ ಸಿದ್ಧಪಡಿಸಿ
                       </>
                     )}
                   </button>
 
                   {/* Adaptive Questions Preview */}
                   {questionPool.easy.length > 0 && (
-                    <div className="space-y-4 pt-4 border-t border-slate-200 animate-in fade-in slide-in-from-bottom-2">
-                       <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                          <Brain size={14} className="text-purple-600" />
-                          Adaptive Question Pool (Kannada)
-                       </h4>
-                       <div className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                          {questionPool.easy.map((q, i) => (
-                             <div key={i} className="p-3 bg-white border border-emerald-100 rounded-xl">
-                                <span className="text-[10px] font-black text-emerald-600 uppercase mb-1 block">Level: Easy</span>
-                                <p className="text-xs font-bold text-slate-700 leading-relaxed">{q.q}</p>
-                             </div>
-                          ))}
-                          {questionPool.difficult.map((q, i) => (
-                             <div key={i} className="p-3 bg-white border border-rose-100 rounded-xl">
-                                <span className="text-[10px] font-black text-rose-600 uppercase mb-1 block">Level: Difficult</span>
-                                <p className="text-xs font-bold text-slate-700 leading-relaxed">{q.q}</p>
-                             </div>
-                          ))}
-                       </div>
+                    <div className="space-y-3 pt-3 border-t border-border">
+                      <h4 className="text-xs font-semibold text-foreground-muted uppercase tracking-wider flex items-center gap-1.5">
+                        <Brain size={14} className="text-accent" />
+                        ಸಿದ್ಧಪಡಿಸಲಾದ ಕನ್ನಡ ಪ್ರಶ್ನೆಗಳು
+                      </h4>
+                      <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                        {questionPool.easy.map((q, i) => (
+                          <div key={i} className="p-2.5 bg-background border border-border rounded-lg">
+                            <span className="text-[10px] font-bold text-emerald-700 uppercase mb-0.5 block">ಹಂತ: ಸುಲಭ</span>
+                            <p className="text-xs font-medium text-foreground leading-relaxed">{q.q}</p>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
 
               {/* Right Side: Form */}
-              <form onSubmit={handlePostJob} className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Job Title</label>
+              <form onSubmit={handlePostJob} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-foreground-muted uppercase tracking-wider">ಹುದ್ದೆ ಶೀರ್ಷಿಕೆ</label>
                     <input 
                       required
                       type="text" 
-                      placeholder="e.g. Delivery Executive"
+                      placeholder="ಉದಾ. Delivery Executive"
                       value={jobFormData.title}
                       onChange={(e) => setJobFormData({...jobFormData, title: e.target.value})}
-                      className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 transition-all font-bold text-sm"
+                      className="w-full px-3 py-2 bg-background border border-border rounded-xl focus:border-primary focus:ring-1 focus:ring-primary outline-none text-xs font-medium text-foreground"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Location</label>
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-foreground-muted uppercase tracking-wider">ಸ್ಥಳ (Location)</label>
                     <input 
                       required
                       type="text" 
-                      placeholder="e.g. Bangalore"
+                      placeholder="ಉದಾ. Bangalore"
                       value={jobFormData.location}
                       onChange={(e) => setJobFormData({...jobFormData, location: e.target.value})}
-                      className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 transition-all font-bold text-sm"
+                      className="w-full px-3 py-2 bg-background border border-border rounded-xl focus:border-primary focus:ring-1 focus:ring-primary outline-none text-xs font-medium text-foreground"
                     />
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Salary</label>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-foreground-muted uppercase tracking-wider">ವೇತನ (Salary)</label>
                   <input 
                     required
                     type="text" 
-                    placeholder="e.g. ₹25,000 - ₹35,000"
+                    placeholder="ಉದಾ. ₹25,000 - ₹35,000"
                     value={jobFormData.salary}
                     onChange={(e) => setJobFormData({...jobFormData, salary: e.target.value})}
-                    className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 transition-all font-bold text-sm"
+                    className="w-full px-3 py-2 bg-background border border-border rounded-xl focus:border-primary focus:ring-1 focus:ring-primary outline-none text-xs font-medium text-foreground"
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Job Summary (AI Generated)</label>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-foreground-muted uppercase tracking-wider">ಸಾರಾಂಶ (Description)</label>
                   <textarea 
                     required
                     rows={2}
                     value={jobFormData.description}
                     onChange={(e) => setJobFormData({...jobFormData, description: e.target.value})}
-                    className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 transition-all font-medium text-xs resize-none"
+                    className="w-full px-3 py-2 bg-background border border-border rounded-xl focus:border-primary focus:ring-1 focus:ring-primary outline-none text-xs font-medium text-foreground resize-none"
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Eligibility Parameters</label>
-                  <textarea 
-                    required
-                    rows={2}
-                    value={jobFormData.eligibility}
-                    onChange={(e) => setJobFormData({...jobFormData, eligibility: e.target.value})}
-                    className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:border-blue-600 transition-all font-medium text-xs resize-none"
-                  />
-                </div>
-
-                <div className="pt-4">
+                <div className="pt-2">
                   <button 
                     disabled={isSubmitting}
                     type="submit"
-                    className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-lg shadow-xl shadow-slate-900/10 hover:bg-black transition-all disabled:opacity-50 flex items-center justify-center gap-3"
+                    className="w-full py-2.5 bg-primary hover:bg-[#131F37] text-white rounded-xl font-semibold text-sm shadow-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {isSubmitting ? (
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
                     ) : (
                       <>
-                        <CheckCircle2 size={20} />
-                        Publish Campaign
+                        <CheckCircle2 size={16} />
+                        ಪ್ರಕಟಿಸಿ (Publish Campaign)
                       </>
                     )}
                   </button>

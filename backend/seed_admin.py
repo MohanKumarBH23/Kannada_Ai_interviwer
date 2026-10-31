@@ -18,34 +18,54 @@ db = client.kannada_interview_db
 users_collection = db.users
 
 
-async def seed_admin():
+async def seed_users():
+    # 1. Admin Account
     admin_email = "admin@admin.com"
     admin_password = "admin123"
+    hashed_admin_pw = get_password_hash(admin_password)
 
-    existing_admin = await users_collection.find_one({"email": admin_email})
-
-    if existing_admin:
-        print(f"Admin user already exists: {admin_email}")
-        return
-
-    hashed_password = get_password_hash(admin_password)
-
-    new_admin = {
-        "name": "Admin User",
-        "email": admin_email,
-        "hashed_password": hashed_password,
-        "role": "admin",
-        "created_at": datetime.now(timezone.utc),
-    }
-
-
-    await users_collection.insert_one(new_admin)
-    print(
-        f"Successfully created admin user: {admin_email} "
-        f"with password: {admin_password}"
+    await users_collection.update_one(
+        {"email": admin_email},
+        {
+            "$set": {
+                "name": "Platform Admin",
+                "hashed_password": hashed_admin_pw,
+                "role": "admin",
+            },
+            "$setOnInsert": {
+                "created_at": datetime.now(timezone.utc),
+            }
+        },
+        upsert=True
     )
+
+    # 2. Dedicated Recruiter Account
+    recruiter_email = "recruiter@recruiter.com"
+    recruiter_password = "recruiter123"
+    hashed_recruiter_pw = get_password_hash(recruiter_password)
+
+    await users_collection.update_one(
+        {"email": recruiter_email},
+        {
+            "$set": {
+                "name": "Karnataka Talent Recruiter",
+                "hashed_password": hashed_recruiter_pw,
+                "role": "recruiter",
+            },
+            "$setOnInsert": {
+                "created_at": datetime.now(timezone.utc),
+            }
+        },
+        upsert=True
+    )
+
+    print("========================================")
+    print("Default Login Credentials Ready:")
+    print("----------------------------------------")
+    print(f"Recruiter Login: {recruiter_email} / {recruiter_password}")
+    print(f"Admin Login:     {admin_email} / {admin_password}")
+    print("========================================")
 
 
 if __name__ == "__main__":
-
-    asyncio.run(seed_admin())
+    asyncio.run(seed_users())

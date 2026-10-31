@@ -7,7 +7,6 @@ import asyncio
 import fitz
 import csv
 import io
-from fastapi.security import OAuth2PasswordBearer
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 
@@ -26,7 +25,6 @@ from database import (
 import messaging_service
 
 
-# Removed optional_oauth2_scheme as login is now mandatory.
 
 
 

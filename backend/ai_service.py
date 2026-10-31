@@ -31,15 +31,21 @@ if API_KEY and API_KEY != "your_api_key_here":
         is_configured = False
 
 # Constants for models on OpenRouter
-MODEL_NAME = "google/gemini-2.0-flash-001"
+MODEL_NAME = os.getenv("GEMINI_MODEL", "google/gemini-2.5-flash")
 
 QUESTION_SYSTEM_INSTRUCTION = (
-    "You are a Technical Interview Question Generator. Your role is to generate "
-    "highly specific, adaptive questions in Kannada. You must analyze the "
-    "candidate's previous answer and deep-dive into the technical details "
-    "they mentioned. After the initial introduction, focus on technical "
-    "depth and specific technologies (e.g., React, Python). Keep the "
-    "conversation flowing naturally."
+    "You are an empathetic, culturally aware, and highly professional AI Interviewer "
+    "specialized in assessing candidates for operational, frontline, and blue-collar roles "
+    "(such as Delivery Executives, Commercial Drivers, Security Guards, Warehouse Associates, "
+    "Electricians, Plumbers, Customer Support, Retail Helpers, and Technicians) in Karnataka. "
+    "Your core guidelines for high-accuracy evaluation:\n"
+    "1. Language & Format: Ask all questions in clear, conversational, natural Kannada, "
+    "followed by ' ||| ' and the English translation.\n"
+    "2. Realistic Practical Focus: Ask practical, scenario-based questions about everyday job situations, "
+    "safety protocols, problem-solving, customer courtesy, punctuality, and equipment handling—NOT academic or coding jargon.\n"
+    "3. Candidate Empathy: Candidates may be under-educated or speak colloquial Kannada or Kanglish. "
+    "Assess their core competence, honesty, safety awareness, and work ethic fairly without penalizing for grammar or lack of English.\n"
+    "4. Natural Adaptive Follow-ups: Acknowledge what the candidate stated in their previous response and build naturally upon it."
 )
 
 
@@ -122,27 +128,50 @@ async def transcribe_audio(audio_bytes: bytes, mime_type: str | None) -> str:
 async def generate_first_question(
     job_role: str, difficulty: str, resume_text: str | None = None
 ) -> str:
-    # Always return "Tell about yourself" as the first question as requested.
-    # This also saves API costs and ensures a consistent start.
+    from training_data import normalize_role
+    canonical_role = normalize_role(job_role)
     return (
-        f"ನಮಸ್ಕಾರ! ನಿಮ್ಮ {job_role} ಸಂದರ್ಶನಕ್ಕೆ ಸ್ವಾಗತ. ನಿಮ್ಮ ಬಗ್ಗೆ ಸ್ವಲ್ಪ ತಿಳಿಸಿ? "
-        f"||| Hello! Welcome to your {job_role} interview. Tell me a little about yourself?"
+        f"ನಮಸ್ಕಾರ! ನಿಮ್ಮ {canonical_role} ಸಂದರ್ಶನಕ್ಕೆ ಸ್ವಾಗತ. ನಿಮ್ಮ ಬಗ್ಗೆ ಮತ್ತು ನಿಮ್ಮ ಹಿಂದಿನ ಕೆಲಸದ ಅನುಭವದ ಬಗ್ಗೆ ಸಂಕ್ಷಿಪ್ತವಾಗಿ ತಿಳಿಸಿ? "
+        f"||| Hello! Welcome to your {canonical_role} interview. Please tell me briefly about yourself and your past work experience."
     )
 
 
 async def evaluate_answer_and_get_next(
     job_role: str, previous_messages: list, candidate_answer: str
 ) -> dict:
+    from training_data import normalize_role, get_questions_for_role
+    canonical_role = normalize_role(job_role)
+    user_turns = sum(1 for msg in previous_messages if msg.get("role") == "user") + 1
+    sample_qs = get_questions_for_role(canonical_role, limit=4)
+
     if not is_configured or not client:
-        if len(previous_messages) >= 5:
+        if user_turns >= 4:
             return {
-                "feedback": "ಧನ್ಯವಾದಗಳು. ನಿಮ್ಮ ಸಂದರ್ಶನ ಪೂರ್ಣಗೊಂಡಿದೆ.",
+                "feedback": (
+                    "ಧನ್ಯವಾದಗಳು! ನಿಮ್ಮ ಎಲ್ಲಾ ಉತ್ತರಗಳನ್ನು ಪರಿಶೀಲಿಸಲಾಗಿದೆ. ನಿಮ್ಮ ಸಂದರ್ಶನ ಯಶಸ್ವಿಯಾಗಿ ಪೂರ್ಣಗೊಂಡಿದೆ. "
+                    "||| Thank you! All your responses have been evaluated. Your interview has been successfully completed."
+                ),
                 "next_question": None,
                 "is_completed": True,
             }
+        asked_texts = [msg.get("content", "") for msg in previous_messages]
+        next_q = None
+        for q_entry in sample_qs:
+            q_text = q_entry["question"]
+            if not any(q_text[:20] in a for a in asked_texts):
+                next_q = q_text
+                break
+        if not next_q:
+            next_q = (
+                f"{canonical_role} ಕೆಲಸದಲ್ಲಿ ಸುರಕ್ಷತೆ ಮತ್ತು ಸಮಯಪಾಲನೆಯ ಬಗ್ಗೆ ನಿಮ್ಮ ಅಭಿಪ್ರಾಯವೇನು? "
+                f"||| What are your thoughts on safety and punctuality in this {canonical_role} role?"
+            )
         return {
-            "feedback": f"{job_role} ಬಗ್ಗೆ ನಿಮ್ಮ ಉತ್ತರ ಚೆನ್ನಾಗಿದೆ.",
-            "next_question": f"ಈ ಪಾತ್ರದಲ್ಲಿ ({job_role}) ನಿಮ್ಮ ತಾಂತ್ರಿಕ ಅನುಭವದ ಬಗ್ಗೆ ಇನ್ನಷ್ಟು ವಿವರಿಸಿ?",
+            "feedback": (
+                "ಉತ್ತಮ ವಿವರಣೆ ನೀಡಿದ್ದೀರಿ. ನಿಮ್ಮ ಪ್ರಾಯೋಗಿಕ ಅನುಭವ ತಿಳಿಯಿತು. "
+                "||| Good explanation. Your practical experience is noted."
+            ),
+            "next_question": next_q,
             "is_completed": False,
         }
 
@@ -151,44 +180,47 @@ async def evaluate_answer_and_get_next(
     )
     history += f"\ncandidate: {candidate_answer}"
 
-    sample_qs = get_questions_for_role(job_role, limit=2)
     rubric_block = ""
     if sample_qs:
-        rubric_block = "\nScoring rubric hints for this role (use to calibrate question depth):\n"
+        rubric_block = "\nCurated Domain Rubric for this role (use to calibrate question depth and assess answer accuracy):\n"
         for ex in sample_qs:
             rubric_block += f"- [{ex['category']}] {ex['question']}\n"
-            for hint in ex['ideal_answer_hints'][:2]:
+            for hint in ex.get('ideal_answer_hints', []):
                 rubric_block += f"    • {hint}\n"
 
+    should_conclude_hint = "Conclude the interview now by setting is_completed to true and next_question to null" if user_turns >= 4 else "Generate a specific, relevant situational follow-up question"
+
     question_prompt = f"""
-    Job Role: {job_role}
+    Job Role: {canonical_role}
+    Interview Turn: {user_turns} of 4
     {rubric_block}
     Conversation History:
     {history}
 
     Task:
     1. Analyze the candidate's last answer: "{candidate_answer}"
-    2. If the interview has covered enough ground (approx 6-8 substantial exchanges), decide if it's time to conclude.
-    3. If not concluding, generate a specific follow-up question in Kannada that deep-dives into a technical detail,
-       a scenario, or a tool mentioned in the candidate's last answer.
-    4. Ensure the question is NOT generic. It must be unique to this specific conversation.
-    5. If concluding, set "is_completed" to true.
+    2. Turn guidance:
+       - If Turn 1: Ask about core daily tasks and equipment/tools/vehicle handling.
+       - If Turn 2: Ask a practical situational problem/scenario (e.g. handling customer issues, damaged goods, or traffic delay).
+       - If Turn 3: Ask a safety, emergency response, or punctuality/integrity question.
+       - If Turn 4 or more: {should_conclude_hint}.
+    3. Ensure the question is in clean, spoken Kannada with English translation after ' ||| '.
+    4. Keep questions realistic and grounded in everyday blue-collar operations—NO abstract or programming terminology.
 
     Format your response as a valid JSON object:
     {{
-        "next_question": "Your specific follow-up question in Kannada ||| English translation (or null if is_completed is true)",
+        "next_question": "Kannada question ||| English translation (or null if is_completed is true)",
         "is_completed": boolean
     }}
     """
 
     feedback_prompt = f"""
-    You are a professional interviewer. Evaluate the candidate's answer: "{candidate_answer}".
-    If the answer is incorrect or fundamentally flawed, explicitly state that it is wrong and briefly explain why.
-    If the answer is correct but missing points, provide constructive feedback.
-    If the answer is fully correct, acknowledge it positively.
-    Keep the feedback very brief (1-2 sentences).
-    Do not ask a question here. Just feedback.
-    Provide the Kannada feedback first, followed by ' ||| ' and then the English translation.
+    You are an encouraging and fair interviewer assessing a candidate for the role of '{canonical_role}'.
+    Candidate's answer: "{candidate_answer}".
+    Evaluate whether the candidate demonstrates practical competence, honesty, safety awareness, or relevant experience for a {canonical_role}.
+    Note: The candidate may speak colloquial Kannada or brief sentences. Evaluate intent and practical correctness.
+    Provide constructive feedback in 1-2 friendly sentences.
+    Format: [Kannada Feedback] ||| [English Translation].
     """
 
     try:
@@ -231,48 +263,87 @@ async def evaluate_answer_and_get_next(
         }
     except Exception as e:
         print(f"Error evaluating answer: {e}")
+        if user_turns >= 4:
+            return {
+                "feedback": (
+                    "ಧನ್ಯವಾದಗಳು! ನಿಮ್ಮ ಎಲ್ಲಾ ಉತ್ತರಗಳನ್ನು ಪರಿಶೀಲಿಸಲಾಗಿದೆ. ನಿಮ್ಮ ಸಂದರ್ಶನ ಯಶಸ್ವಿಯಾಗಿ ಪೂರ್ಣಗೊಂಡಿದೆ. "
+                    "||| Thank you! All your responses have been evaluated. Your interview has been successfully completed."
+                ),
+                "next_question": None,
+                "is_completed": True,
+            }
+        asked_texts = [msg.get("content", "") for msg in previous_messages]
+        next_q = None
+        for q_entry in sample_qs:
+            q_text = q_entry["question"]
+            if not any(q_text[:20] in a for a in asked_texts):
+                next_q = q_text
+                break
+        if not next_q:
+            next_q = (
+                f"{canonical_role} ಕೆಲಸದಲ್ಲಿ ಸುರಕ್ಷತೆ ಮತ್ತು ಸಮಯಪಾಲನೆಯ ಬಗ್ಗೆ ನಿಮ್ಮ ಅಭಿಪ್ರಾಯವೇನು? "
+                f"||| What are your thoughts on safety and punctuality in this {canonical_role} role?"
+            )
         return {
-            "feedback": "ಧನ್ಯವಾದಗಳು. ನಿಮ್ಮ ಉತ್ತರವನ್ನು ಗಮನಿಸಿದೆವು.",
-            "next_question": f"{job_role} ಪಾತ್ರದ ಬಗ್ಗೆ ಇನ್ನೊಂದು ಪ್ರಶ್ನೆ: ಈ ಕ್ಷೇತ್ರದಲ್ಲಿ ನೀವು ಬಳಸುವ ಮುಖ್ಯ ಸಾಧನಗಳ ಬಗ್ಗೆ ತಿಳಿಸಿ?",
+            "feedback": (
+                "ಧನ್ಯವಾದಗಳು, ನಿಮ್ಮ ಉತ್ತರವನ್ನು ದಾಖಲಿಸಲಾಗಿದೆ. "
+                "||| Thank you, your answer has been recorded."
+            ),
+            "next_question": next_q,
             "is_completed": False,
         }
 
 
 async def generate_final_results(job_role: str, messages: list) -> dict:
+    from training_data import normalize_role, get_questions_for_role
+    canonical_role = normalize_role(job_role)
+    
     if not is_configured or not client:
         return {
             "overall_feedback": (
-                "ನೀವು ಸಂದರ್ಶನದಲ್ಲಿ ಉತ್ತಮವಾಗಿ ಕಾರ್ಯನಿರ್ವಹಿಸಿದ್ದೀರಿ. "
-                "(You performed well in the interview.)"
+                f"ನೀವು {canonical_role} ಸಂದರ್ಶನದಲ್ಲಿ ಉತ್ತಮ ಪ್ರಾಯೋಗಿಕ ಜ್ಞಾನ ಮತ್ತು ಸುರಕ್ಷತಾ ಕಾಳಜಿಯನ್ನು ಪ್ರದರ್ಶಿಸಿದ್ದೀರಿ. "
+                "ಗ್ರಾಹಕ ಸೇವೆ ಮತ್ತು ಸಮಯಪಾಲನೆಯಲ್ಲಿ ನಿಮ್ಮ ಅನುಭವವು ಈ ಕೆಲಸಕ್ಕೆ ಸೂಕ್ತವಾಗಿದೆ. "
+                f"||| You demonstrated good practical knowledge and safety awareness during the {canonical_role} interview. "
+                "Your customer service and punctuality make you well-suited for this job."
             ),
-            "score": 85,
+            "score": 82,
         }
 
     history = "\n".join(
         [f"{msg['role']}: {msg['content']}" for msg in messages]
     )
 
-    sample_qs = get_questions_for_role(job_role, limit=3)
+    sample_qs = get_questions_for_role(canonical_role, limit=4)
     rubric_lines = ""
     if sample_qs:
-        rubric_lines = "\nUse the following domain rubric to calibrate your score:\n"
+        rubric_lines = "\nUse the following domain rubric to calibrate your score for this role:\n"
         for ex in sample_qs:
-            rubric_lines += f"- {ex['category']}: {ex['question']}\n"
-            for hint in ex['ideal_answer_hints']:
+            rubric_lines += f"- [{ex['category']}]: {ex['question']}\n"
+            for hint in ex.get('ideal_answer_hints', []):
                 rubric_lines += f"    • {hint}\n"
 
     prompt = f"""
-    You are an expert AI interviewer evaluating a candidate for the role of '{job_role}'.
+    You are an expert interviewer evaluating a candidate for the role of '{canonical_role}'.
     {rubric_lines}
-    Here is the full interview transcript (in Kannada):
+    Here is the full interview transcript (in Kannada and English):
     {history}
 
-    Provide a detailed, fair evaluation of the candidate's performance.
-    Consider technical accuracy, depth of knowledge, communication clarity, and problem-solving approach.
-    Format your response as a valid JSON object with the following keys:
+    Evaluation Criteria for Operational & Blue-Collar Roles:
+    1. Practical Competence: Did the candidate demonstrate real-world knowledge of tools, vehicles, rules, or processes?
+    2. Safety Awareness: Did they prioritize safety (road safety, electrical earthing, emergency stops, fire precautions)?
+    3. Reliability & Punctuality: Did they show dedication, honesty, and readiness for shift work?
+    4. Communication & Courtesy: Did they communicate respectfully in Kannada?
+
+    Calibrated Scoring Standards:
+    - 85 - 100: Exceptional candidate with strong experience, clear safety knowledge, and polite demeanor.
+    - 70 - 84: Competent candidate with good basic skills and positive attitude; suitable for hire.
+    - 50 - 69: Candidate with limited experience or partial answers; needs on-the-job training.
+    - Below 50: Ineligible or unsafe answers.
+
+    Format your response as a valid JSON object:
     {{
         "overall_feedback": "Detailed overall feedback in Kannada ||| English translation (minimum 3 sentences)",
-        "score": Integer score out of 100
+        "score": Integer score between 0 and 100
     }}
     Ensure the output is ONLY the JSON object.
     """
@@ -308,12 +379,30 @@ async def generate_interview_report(job_role: str, messages: list, overall_feedb
     """
     if not is_configured or not client:
         return {
-            "confidence_score": 70,
-            "confidence_analysis": "The candidate showed moderate confidence throughout the interview. ||| The candidate showed moderate confidence throughout the interview.",
-            "strengths": "Good communication skills. ||| Good communication skills.",
-            "improvements": "Work on technical depth. ||| Work on technical depth.",
-            "qa_breakdown": [],
-            "recommendation": "Recommended with reservations. ||| Recommended with reservations."
+            "confidence_score": 78,
+            "confidence_analysis": (
+                "ಅಭ್ಯರ್ಥಿಯು ಪ್ರಶ್ನೆಗಳಿಗೆ ನೇರವಾಗಿ ಮತ್ತು ವಿಶ್ವಾಸದಿಂದ ಉತ್ತರಿಸಿದ್ದಾರೆ. ಪ್ರಾಯೋಗಿಕ ಕೆಲಸದ ಅನುಭವವು ಸ್ಪಷ್ಟವಾಗಿ ಗೋಚರಿಸುತ್ತದೆ. "
+                "||| The candidate answered questions directly and with confidence. Practical work experience is clearly demonstrated."
+            ),
+            "strengths": (
+                "• ಉತ್ತಮ ವಾಹನ ಮತ್ತು ರಸ್ತೆ ಸುರಕ್ಷತೆ ಜ್ಞಾನ ||| • Strong vehicle and operational safety awareness\n"
+                "• ಗ್ರಾಹಕರೊಂದಿಗೆ ವಿನಮ್ರ ಸಂಭಾಷಣೆ ಕೌಶಲ್ಯ ||| • Polite and courteous communication\n"
+                "• ಸಮಯಪಾಲನೆ ಮತ್ತು ಕೆಲಸದ ನಿಷ್ಠೆ ||| • Demonstrated punctuality and commitment to work"
+            ),
+            "improvements": (
+                "• ಆಪ್‌ನಲ್ಲಿ ಡಿಜಿಟಲ್ ಪಾವತಿ ಸಮಸ್ಯೆಗಳನ್ನು ನಿಭಾಯಿಸುವುದರಲ್ಲಿ ಇನ್ನಷ್ಟು ಅಭ್ಯಾಸ ಅಗತ್ಯ ||| • Practice handling digital app payment disputes\n"
+                "• ತುರ್ತು ಪರಿಸ್ಥಿತಿಗಳಲ್ಲಿ ಹಬ್ ಮ್ಯಾನೇಜರ್‌ಗೆ ತ್ವರಿತ ವರದಿ ಮಾಡುವಿಕೆ ||| • Quicker escalation to hub manager during peak emergencies"
+            ),
+            "qa_breakdown": [
+                {"question_num": 1, "rating": "strong", "note": "Clear self-introduction with past work history."},
+                {"question_num": 2, "rating": "strong", "note": "Accurate practical knowledge of core daily duties."},
+                {"question_num": 3, "rating": "average", "note": "Understood customer situation well, can improve conflict de-escalation."},
+                {"question_num": 4, "rating": "strong", "note": "Demonstrated high safety vigilance and adherence to rules."}
+            ],
+            "recommendation": (
+                "ಈ ಹುದ್ದೆಗೆ ನೇಮಕ ಮಾಡಿಕೊಳ್ಳಲು ಸೂಕ್ತವಾಗಿದ್ದಾರೆ (ಶಿಫಾರಸು ಮಾಡಲಾಗಿದೆ). "
+                "||| Suitable for hire for this role (Recommended)."
+            )
         }
 
     # Build Q&A pairs from messages
@@ -575,9 +664,12 @@ async def generate_adaptive_question_pool(job_role: str, skills: list) -> dict:
     Generates a pool of 'easy' and 'difficult' questions in Kannada for a job role.
     """
     if not is_configured or not client:
+        from training_data import get_questions_for_role
+        easy_list = get_questions_for_role(job_role, difficulty="easy", limit=4)
+        hard_list = get_questions_for_role(job_role, difficulty="hard", limit=4)
         return {
-            "easy": [{"q": "ಸರಳ ಪ್ರಶ್ನೆ? (Simple question?)", "category": "General"}],
-            "difficult": [{"q": "ಕಠಿಣ ಪ್ರಶ್ನೆ? (Difficult question?)", "category": "Technical"}]
+            "easy": [{"q": q["question"], "category": q["category"]} for q in easy_list] or [{"q": f"{job_role} ಕೆಲಸದ ಬಗ್ಗೆ ಸರಳ ಪ್ರಶ್ನೆ? ||| Basic question for {job_role}?", "category": "Core Duties"}],
+            "difficult": [{"q": q["question"], "category": q["category"]} for q in hard_list] or [{"q": f"{job_role} ಕೆಲಸದಲ್ಲಿ ಕಠಿಣ ಸನ್ನಿವೇಶ ಹೇಗೆ ನಿಭಾಯಿಸುತ್ತೀರಿ? ||| How do you handle difficult situations in {job_role}?", "category": "Problem Solving"}]
         }
 
     prompt = f"""

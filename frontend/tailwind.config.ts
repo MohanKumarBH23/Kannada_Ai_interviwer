@@ -10,21 +10,39 @@ const config: Config = {
     extend: {
       colors: {
         background: "var(--background)",
-        foreground: "var(--foreground)",
-        amazon: {
-          green: "#007185",
-          dark: "#232f3e",
-          orange: "#FF9900",
-          light: "#e7f4f5",
+        foreground: {
+          DEFAULT: "var(--foreground)",
+          muted: "var(--foreground-muted)",
+        },
+        surface: {
+          DEFAULT: "var(--surface)",
+          raised: "var(--surface-raised)",
+          dark: "var(--surface-dark)",
+        },
+        border: "var(--border)",
+        brand: {
+          indigo: "#1B2A4A",
+          amber: "#D97706",
+          ochre: "#B45309",
+          bone: "#FBFBFA",
+          charcoal: "#0F172A",
         },
         primary: {
-          DEFAULT: "#007185", // Amazon Green/Teal
-          foreground: "#ffffff",
+          DEFAULT: "var(--primary)",
+          hover: "var(--primary-hover)",
+          foreground: "var(--primary-foreground)",
         },
-        secondary: {
-          DEFAULT: "#FF9900", // Amazon Orange
-          foreground: "#ffffff",
-        }
+        accent: {
+          DEFAULT: "var(--accent)",
+          hover: "var(--accent-hover)",
+          foreground: "var(--accent-foreground)",
+          subtle: "var(--accent-subtle)",
+          "subtle-foreground": "var(--accent-subtle-foreground)",
+        },
+      },
+      fontFamily: {
+        sans: ["var(--font-inter)", "Inter", "Noto Sans Kannada", "Tunga", "-apple-system", "sans-serif"],
+        kannada: ["Noto Sans Kannada", "Tunga", "Vijaya", "sans-serif"],
       },
     },
   },

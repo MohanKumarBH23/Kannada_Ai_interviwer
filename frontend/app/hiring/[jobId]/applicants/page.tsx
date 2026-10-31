@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
-  ArrowLeft, Search, Filter, MoreHorizontal, 
-  Phone, Link as LinkIcon, MessageCircle, Loader2
+  ArrowLeft, Search, MoreHorizontal, 
+  Phone, Link as LinkIcon, Loader2
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getCandidates, evaluateCandidate } from '@/lib/api';
@@ -294,16 +294,4 @@ function SelectionBadge({ status }: { status: string }) {
   );
 }
 
-function SuitabilityBadge({ level }: { level: string }) {
-  const styles: any = {
-    "Good": "bg-emerald-500 text-white",
-    "Average": "bg-slate-200 text-slate-700",
-    "Not Suitable": "bg-rose-500 text-white",
-  };
-  
-  return (
-    <div className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase flex items-center gap-1.5 ${styles[level]}`}>
-      {level}
-    </div>
-  );
-}
+

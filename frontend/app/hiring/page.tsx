@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Briefcase, MapPin, Calendar, ArrowRight, Search, Filter, Trash2, BarChart3 } from 'lucide-react';
+import { Plus, Briefcase, MapPin, ArrowRight, Search, Trash2, BarChart3, Filter, Calendar } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { getJobs, deleteJob } from '@/lib/api';
 import { useRouter } from 'next/navigation';

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { UserPlus, Mail, Lock, User, Loader2 } from "lucide-react";
+import { UserPlus, Mail, Lock, User, Loader2, ArrowRight } from "lucide-react";
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
@@ -15,7 +15,6 @@ export default function RegisterPage() {
   const { login } = useAuth();
   const router = useRouter();
 
-  // Determine role from query params
   const [role, setRole] = useState<string>("user");
 
   useEffect(() => {
@@ -63,7 +62,6 @@ export default function RegisterPage() {
       if (redirectToParam) {
         redirectTo = redirectToParam;
       } else {
-        // Role-based default redirection
         if (userData.role === "admin" || userData.role === "recruiter") {
           redirectTo = "/recruiter";
         } else {
@@ -83,77 +81,77 @@ export default function RegisterPage() {
   const isRecruiter = role === 'recruiter';
 
   return (
-    <div className="min-h-screen flex items-center justify-center py-12 px-6 bg-slate-50">
-      <div className="w-full max-w-md p-10 rounded-[2.5rem] bg-white shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-slate-100">
-        <div className="text-center mb-10">
-          <div className={`w-20 h-20 ${isRecruiter ? 'bg-blue-50 text-blue-600' : 'bg-teal-50 text-teal-600'} rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-inner`}>
-            <UserPlus className="w-10 h-10" />
+    <div className="min-h-screen flex items-center justify-center py-12 px-6 bg-background">
+      <div className="w-full max-w-md p-8 rounded-2xl bg-surface shadow-sm border border-border">
+        <div className="text-center mb-8">
+          <div className="w-14 h-14 bg-accent-subtle text-accent border border-amber-200/50 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <UserPlus className="w-6 h-6" />
           </div>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tight">
+          <h1 className="text-2xl font-black text-foreground tracking-tight">
             {isRecruiter ? 'ನೇಮಕಾತಿದಾರರ ನೋಂದಣಿ' : 'ಹೊಸ ಖಾತೆ ರಚಿಸಿ'}
           </h1>
-          <p className="text-slate-500 mt-3 font-medium">
-            {isRecruiter ? 'Start hiring with AI power.' : 'Create your candidate profile.'}
+          <p className="text-foreground-muted text-sm mt-1 font-medium">
+            {isRecruiter ? 'Recruiter registration' : 'Candidate registration'}
           </p>
-          <div className={`mt-4 inline-block px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${isRecruiter ? 'bg-blue-100 text-blue-700' : 'bg-teal-100 text-teal-700'}`}>
-            Registering as {role}
+          <div className="mt-3 inline-block px-3 py-1 rounded-md text-xs font-semibold uppercase tracking-wider bg-surface-raised border border-border text-foreground-muted">
+            {isRecruiter ? 'ಪಾತ್ರ: ನೇಮಕಾತಿದಾರ (Recruiter)' : 'ಪಾತ್ರ: ಅಭ್ಯರ್ಥಿ (Candidate)'}
           </div>
         </div>
 
         {error && (
-          <div className="mb-8 p-4 bg-red-50 text-red-600 rounded-2xl text-sm font-medium border border-red-100 animate-shake">
+          <div className="mb-6 p-3.5 bg-red-50 text-red-700 rounded-xl text-sm font-medium border border-red-200">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700 ml-1">
-              ಹೆಸರು (Name)
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-foreground-muted">
+              ಹೆಸರು (Full Name)
             </label>
-            <div className="relative group">
-              <User className={`w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 ${isRecruiter ? 'text-blue-400 group-focus-within:text-blue-600' : 'text-teal-400 group-focus-within:text-teal-600'} transition-colors`} />
+            <div className="relative">
+              <User className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-foreground-muted" />
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-slate-100 outline-none text-slate-900 transition-all shadow-sm"
+                className="w-full pl-10 pr-3.5 py-2.5 bg-background border border-border focus:border-primary focus:ring-1 focus:ring-primary rounded-xl outline-none text-foreground text-sm font-medium transition-colors"
                 placeholder="ನಿಮ್ಮ ಪೂರ್ಣ ಹೆಸರು"
               />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700 ml-1">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-foreground-muted">
               ಇಮೇಲ್ (Email)
             </label>
-            <div className="relative group">
-              <Mail className={`w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 ${isRecruiter ? 'text-blue-400 group-focus-within:text-blue-600' : 'text-teal-400 group-focus-within:text-teal-600'} transition-colors`} />
+            <div className="relative">
+              <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-foreground-muted" />
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-slate-100 outline-none text-slate-900 transition-all shadow-sm"
+                className="w-full pl-10 pr-3.5 py-2.5 bg-background border border-border focus:border-primary focus:ring-1 focus:ring-primary rounded-xl outline-none text-foreground text-sm font-medium transition-colors"
                 placeholder="name@example.com"
               />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700 ml-1">
-              ಪಾಸ್ವರ್ಡ್ (Password)
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-foreground-muted">
+              ಪಾಸ್‌ವರ್ಡ್ (Password)
             </label>
-            <div className="relative group">
-              <Lock className={`w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 ${isRecruiter ? 'text-blue-400 group-focus-within:text-blue-600' : 'text-teal-400 group-focus-within:text-teal-600'} transition-colors`} />
+            <div className="relative">
+              <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-foreground-muted" />
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={6}
-                className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-4 focus:ring-slate-100 outline-none text-slate-900 transition-all shadow-sm"
+                className="w-full pl-10 pr-3.5 py-2.5 bg-background border border-border focus:border-primary focus:ring-1 focus:ring-primary rounded-xl outline-none text-foreground text-sm font-medium transition-colors"
                 placeholder="ಕನಿಷ್ಠ 6 ಅಕ್ಷರಗಳು"
               />
             </div>
@@ -162,16 +160,23 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className={`w-full py-5 mt-4 ${isRecruiter ? 'bg-blue-600 hover:bg-blue-700' : 'bg-teal-600 hover:bg-teal-700'} text-white rounded-2xl font-bold shadow-xl transition-all flex items-center justify-center gap-2 disabled:opacity-70 active:scale-[0.98]`}
+            className="w-full mt-2 py-3 bg-primary hover:bg-[#131F37] text-white rounded-xl font-semibold text-sm shadow-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
           >
-            {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : "ನೋಂದಾಯಿಸಿ (Register Now)"}
+            {isLoading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <>
+                <span>ನೋಂದಾಯಿಸಿ (Register)</span>
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
           </button>
         </form>
 
-        <p className="mt-10 text-center text-sm font-medium text-slate-400">
+        <p className="mt-6 text-center text-xs font-medium text-foreground-muted">
           ಈಗಾಗಲೇ ಖಾತೆ ಇದೆಯೇ?{" "}
-          <Link href={`/${typeof window !== 'undefined' ? window.location.search : ''}`} className={`font-black ${isRecruiter ? 'text-blue-600' : 'text-teal-600'} hover:underline`}>
-            ಲಾಗಿನ್ ಆಗಿ (Login here)
+          <Link href="/login" className="font-semibold text-accent hover:underline">
+            ಲಾಗಿನ್ ಆಗಿ (Login)
           </Link>
         </p>
       </div>

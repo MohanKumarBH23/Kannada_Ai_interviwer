@@ -2,7 +2,6 @@ import asyncio
 import os
 from datetime import datetime, timezone
 from motor.motor_asyncio import AsyncIOMotorClient
-from bson import ObjectId
 
 # Re-use DB connection logic
 MONGO_URL = os.getenv("MONGO_URL", "mongodb://localhost:27017")

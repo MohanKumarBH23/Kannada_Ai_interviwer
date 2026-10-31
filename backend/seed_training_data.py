@@ -1,13 +1,16 @@
 """
-One-time script to seed the MongoDB question_bank collection with training data.
-Run with: python seed_training_data.py
+Script to seed the MongoDB question_bank collection with curated blue-collar training data.
+Run with: python backend/seed_training_data.py
 """
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 import os
+import sys
 
-from training_data import get_all_questions
+# Ensure backend directory is in path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from training_data import get_all_questions, get_all_blue_collar_roles
 
 load_dotenv()
 
@@ -20,20 +23,22 @@ async def seed():
     collection = db.get_collection("question_bank")
 
     questions = get_all_questions()
-    inserted = 0
-    skipped = 0
+    upserted = 0
 
     for q in questions:
-        # Idempotent: skip if exact question already exists
-        existing = await collection.find_one({"question": q["question"]})
-        if existing:
-            skipped += 1
-            continue
-        await collection.insert_one(q)
-        inserted += 1
+        await collection.update_one(
+            {"question": q["question"]},
+            {"$set": q},
+            upsert=True
+        )
+        upserted += 1
 
-    print(f"[OK] Seeding complete: {inserted} inserted, {skipped} skipped.")
-    print(f"     Total in question_bank: {await collection.count_documents({})}")
+    total_count = await collection.count_documents({})
+    roles = await collection.distinct("role")
+    
+    print(f"[OK] Question bank seeded successfully: {upserted} questions processed.")
+    print(f"     Total documents in question_bank: {total_count}")
+    print(f"     Distinct roles covered ({len(roles)}): {', '.join(sorted(roles))}")
     client.close()
 
 

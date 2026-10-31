@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { 
-  ArrowLeft, Users, CheckCircle, XCircle, 
+  ArrowLeft, Users, CheckCircle, 
   Clock, TrendingUp, BarChart3, AlertCircle, 
   Award, BrainCircuit, Activity
 } from 'lucide-react';

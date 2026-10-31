@@ -3,56 +3,56 @@
 @tailwind utilities;
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
+  --background: #FBFBFA;
+  --surface: #FFFFFF;
+  --surface-raised: #F4F5F7;
+  --surface-dark: #0F172A;
+  --foreground: #111827;
+  --foreground-muted: #4B5563;
+  --border: #E2E8F0;
+  --primary: #1B2A4A;
+  --primary-hover: #131F37;
+  --primary-foreground: #FFFFFF;
+  --accent: #D97706;
+  --accent-hover: #B45309;
+  --accent-foreground: #FFFFFF;
+  --accent-subtle: #FEF3C7;
+  --accent-subtle-foreground: #92400E;
 }
 
 body {
   color: var(--foreground);
-  background: var(--background);
+  background-color: var(--background);
 }
 
-@layer utilities {
-  .glassmorphism {
-    @apply bg-white bg-opacity-70 backdrop-blur-md border border-white border-opacity-20 shadow-xl;
-  }
-  
-  .glass-dark {
-    @apply bg-slate-900 bg-opacity-80 backdrop-blur-md border border-slate-700 border-opacity-50 shadow-2xl;
-  }
-}
-
-@keyframes float {
-  0% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
-  100% { transform: translateY(0px); }
-}
-
-@keyframes pulse-soft {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.8; }
+/* Kannada script vertical rhythm and legibility */
+:lang(kn), .lang-kn {
+  line-height: 1.65;
+  letter-spacing: 0.01em;
 }
 
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-.animate-float {
-  animation: float 6s ease-in-out infinite;
-}
-
-.animate-pulse-soft {
-  animation: pulse-soft 3s ease-in-out infinite;
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .animate-fade-in {
-  animation: fade-in 1s ease-out forwards;
+  animation: fade-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Custom scrollbar for webkit */
+.animate-fade-in-up {
+  animation: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Custom clean scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -60,9 +60,10 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-slate-300 rounded-full;
+  background: #CBD5E1;
+  border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-slate-400;
+  background: #94A3B8;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Camera, CameraOff, Mic, MicOff, AlertTriangle, Shield, UserCheck, Maximize2, Minimize2 } from 'lucide-react';
+import { Mic, AlertTriangle, Shield, UserCheck, Maximize2, Minimize2 } from 'lucide-react';
 
 interface ProctoringSystemProps {
   sessionId: string;
